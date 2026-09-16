@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=QuickNews
+GenericName=Haber Okuyucu
+Comment=Guvenli, Reklamsiz, Resimsiz ve Yapay Zeka Destekli Minimalist Haber Okuyucu
+Exec=quicknews
+Icon=application-rss+xml
+Terminal=false
+Type=Application
+Categories=Network;News;Feed;Office;Utility;
+StartupWMClass=quicknews
+Keywords=news;rss;feed;ai;clean;reader;omarchy;

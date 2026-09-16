@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DIR="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
+BIN="${HOME}/.local/bin/quicknews-engine"
+
+# Ensure binary exists or copy from target/release
+if [[ ! -x "${BIN}" ]]; then
+    if [[ -f "${DIR}/target/release/quicknews-engine" ]]; then
+        install -d -m 755 "${HOME}/.local/bin"
+        install -m 755 "${DIR}/target/release/quicknews-engine" "${BIN}"
+    elif command -v cargo >/dev/null 2>&1 && [[ -f "${DIR}/Cargo.toml" ]]; then
+        echo "QuickNews motoru derleniyor..."
+        (cd "${DIR}" && cargo build --release && install -d -m 755 "${HOME}/.local/bin" && install -m 755 target/release/quicknews-engine "${BIN}") || true
+    fi
+fi
+
+# Resolve QML shell path
+QML_SHELL=""
+if [[ -f "${DIR}/qml/shell.qml" ]]; then
+    QML_SHELL="${DIR}/qml/shell.qml"
+elif [[ -f "${HOME}/.local/share/quicknews/qml/shell.qml" ]]; then
+    QML_SHELL="${HOME}/.local/share/quicknews/qml/shell.qml"
+elif [[ -f "/usr/share/quicknews/qml/shell.qml" ]]; then
+    QML_SHELL="/usr/share/quicknews/qml/shell.qml"
+fi
+
+# If CLI arguments passed, delegate directly to quicknews-engine
+if [[ "${1:-}" == "--cli" ]]; then
+    shift
+    exec "${BIN}" "$@"
+elif [[ "${1:-}" == "ipc" ]]; then
+    shift
+    if [[ -z "${QML_SHELL}" ]]; then
+        echo "Hata: QuickNews QML kabugu bulunamadi." >&2
+        exit 1
+    fi
+    exec quickshell ipc -p "${QML_SHELL}" call ozdil.quicknews "$@"
+elif [[ "${1:-}" == "--help" || "${1:-}" == "-h" || "${1:-}" == "help" ]]; then
+    exec "${BIN}" help
+elif [[ "${1:-}" == "--version" || "${1:-}" == "-v" || "${1:-}" == "version" ]]; then
+    exec "${BIN}" version
+elif [[ "${1:-}" == "--status" || "${1:-}" == "status" ]]; then
+    exec "${BIN}" status
+elif [[ $# -gt 0 ]]; then
+    case "${1:-}" in
+        sync|list|read|summarize|sources|add-prompt|add-source|remove-source|mark-read)
+            exec "${BIN}" "$@"
+            ;;
+    esac
+fi
+
+# If no args, try quickshell IPC toggle if already running
+if [[ $# -eq 0 ]] && command -v quickshell >/dev/null 2>&1; then
+    if quickshell ipc call ozdil.quicknews toggle >/dev/null 2>&1; then
+        exit 0
+    fi
+fi
+
+# Otherwise launch Quickshell UI
+if command -v quickshell >/dev/null 2>&1 && [[ -n "${QML_SHELL}" ]]; then
+    exec quickshell -p "${QML_SHELL}"
+else
+    echo "Quickshell bulunamadi veya QML kabugu eksik. quicknews-engine CLI moduna geciliyor."
+    exec "${BIN}" help
+fi
