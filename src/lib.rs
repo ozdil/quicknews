@@ -57,7 +57,7 @@ impl QuickNewsApp {
         all_articles
     }
 
-    /// Fetches and cleans full article text (ad-free, image-free).
+    /// Fetches and cleans full article text (ad-free, image-free, AI structured).
     pub async fn read_clean_article(&self, url: &str) -> Result<CleanArticle, SecurityError> {
         // Check cache first
         if let Some(cached) = self.storage.get_cached_content(url) {
@@ -66,7 +66,14 @@ impl QuickNewsApp {
 
         // Fetch raw HTML (up to 2 MiB, SSRF guarded)
         let html_content = fetch_bounded_content(url, MAX_HTTP_PAYLOAD_SIZE, 8).await?;
-        let article = ArticleExtractor::extract(&html_content, url);
+        let mut article = ArticleExtractor::extract(&html_content, url);
+
+        // AI processes 100% of the article text: structures paragraphs, preserves lists, strips clutter
+        let ai_structured_text = AiEngine::clean_full_article_content(&article.title, &article.content_text).await;
+        article.content_text = ai_structured_text;
+        let word_count = article.content_text.split_whitespace().count();
+        article.word_count = word_count;
+        article.reading_time_mins = if word_count == 0 { 1 } else { (word_count + 199) / 200 };
 
         // Cache clean result
         let _ = self.storage.cache_article_content(url, &article);

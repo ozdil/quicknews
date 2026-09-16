@@ -384,7 +384,7 @@ Rectangle {
                         }
                     }
 
-                    // Clean Article Body Text (Pure typography, high readability)
+                    // Clean Article Body Text (Pure typography, high readability, markdown formatted)
                     TextEdit {
                         id: contentTextEdit
                         Layout.fillWidth: true
@@ -395,6 +395,7 @@ Rectangle {
                         wrapMode: Text.WordWrap
                         readOnly: true
                         selectByMouse: true
+                        textFormat: TextEdit.MarkdownText
                     }
 
                     Item { height: 40 }

@@ -71,6 +71,14 @@ impl AdBlocker {
             "comments",
             "disqus",
             "paywall",
+            "more-contents",
+            "content-end",
+            "support-bottom",
+            "donation",
+            "sharebar",
+            "author-box",
+            "print-tool",
+            "content-support",
         ];
 
         for p in &patterns {

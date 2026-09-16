@@ -191,35 +191,91 @@ impl ArticleExtractor {
             }
         }
 
-        // If it's a paragraph or heading block, extract text directly
-        if matches!(
-            tag_name,
-            "p" | "h2" | "h3" | "h4" | "blockquote" | "li"
-        ) {
-            let mut text = String::new();
-            for node in element.text() {
-                text.push_str(node);
-            }
+        if matches!(tag_name, "h1" | "h2" | "h3" | "h4") {
+            let text = element.text().collect::<Vec<_>>().join(" ");
             let cleaned = text.split_whitespace().collect::<Vec<_>>().join(" ");
             if !cleaned.is_empty() {
-                if tag_name.starts_with('h') {
-                    out.push(format!("## {}", cleaned));
-                } else if tag_name == "blockquote" {
-                    out.push(format!("> {}", cleaned));
-                } else if tag_name == "li" {
-                    out.push(format!("- {}", cleaned));
+                out.push(format!("## {}", cleaned));
+            }
+            return;
+        }
+
+        if tag_name == "blockquote" {
+            let text = element.text().collect::<Vec<_>>().join(" ");
+            let cleaned = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !cleaned.is_empty() {
+                out.push(format!("> {}", cleaned));
+            }
+            return;
+        }
+
+        if tag_name == "li" {
+            let is_in_ol = element.parent().and_then(scraper::ElementRef::wrap).map_or(false, |p| p.value().name() == "ol");
+            let text = element.text().collect::<Vec<_>>().join(" ");
+            let cleaned = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !cleaned.is_empty() {
+                if is_in_ol {
+                    out.push(format!("1. {}", cleaned));
                 } else {
-                    out.push(cleaned);
+                    out.push(format!("- {}", cleaned));
                 }
             }
             return;
         }
 
-        // Recurse into children
-        for child in element.children() {
-            if let Some(child_el) = scraper::ElementRef::wrap(child) {
-                Self::collect_clean_blocks(&child_el, out);
+        if tag_name == "p" {
+            let text = element.text().collect::<Vec<_>>().join(" ");
+            let cleaned = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            if !cleaned.is_empty() {
+                out.push(cleaned);
             }
+            return;
+        }
+
+        // For other container elements (div, article, section, etc.):
+        // Walk children. If children contain text nodes and <br>, accumulate them into paragraphs!
+        let mut current_inline = String::new();
+        for child in element.children() {
+            if let Some(text_node) = child.value().as_text() {
+                let t = text_node.trim();
+                if !t.is_empty() {
+                    if !current_inline.is_empty() && !current_inline.ends_with(' ') {
+                        current_inline.push(' ');
+                    }
+                    current_inline.push_str(t);
+                }
+            } else if let Some(child_el) = scraper::ElementRef::wrap(child) {
+                let child_tag = child_el.value().name();
+                if child_tag == "br" {
+                    let cleaned = current_inline.split_whitespace().collect::<Vec<_>>().join(" ");
+                    if !cleaned.is_empty() {
+                        out.push(cleaned);
+                        current_inline.clear();
+                    }
+                } else if matches!(child_tag, "b" | "strong" | "i" | "em" | "a" | "code" | "span") {
+                    let t = child_el.text().collect::<Vec<_>>().join(" ");
+                    let trimmed = t.trim();
+                    if !trimmed.is_empty() {
+                        if !current_inline.is_empty() && !current_inline.ends_with(' ') {
+                            current_inline.push(' ');
+                        }
+                        current_inline.push_str(trimmed);
+                    }
+                } else {
+                    // Flush accumulated inline text before recursing into block child
+                    let cleaned = current_inline.split_whitespace().collect::<Vec<_>>().join(" ");
+                    if !cleaned.is_empty() {
+                        out.push(cleaned);
+                        current_inline.clear();
+                    }
+                    Self::collect_clean_blocks(&child_el, out);
+                }
+            }
+        }
+
+        let cleaned = current_inline.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !cleaned.is_empty() {
+            out.push(cleaned);
         }
     }
 }
