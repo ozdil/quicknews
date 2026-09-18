@@ -212,6 +212,33 @@ impl FeedParser {
                         let clean_title = cur_title.trim().to_string();
 
                         if !clean_title.is_empty() && !clean_link.is_empty() {
+                            // URL security guard: reject non-http(s) schemes and dangerous hosts
+                            if let Ok(parsed_u) = Url::parse(&clean_link) {
+                                match parsed_u.scheme() {
+                                    "http" | "https" => {}
+                                    _ => continue,
+                                }
+                                if let Some(h) = parsed_u.host_str() {
+                                    let h_low = h.to_lowercase();
+                                    if h_low == "localhost"
+                                        || h_low.ends_with(".localhost")
+                                        || h_low.ends_with(".local")
+                                        || h_low.ends_with(".internal")
+                                        || h_low.ends_with(".lan")
+                                    {
+                                        continue;
+                                    }
+                                    if let Ok(ip) = h_low.parse::<std::net::IpAddr>() {
+                                        if crate::core::security::is_private_or_reserved_ip(ip) {
+                                            continue;
+                                        }
+                                    }
+                                } else {
+                                    continue;
+                                }
+                            } else {
+                                continue;
+                            }
                             // Strip HTML tags from summary
                             let plain_summary = Self::strip_html_tags(&cur_desc);
                             let word_count = plain_summary.split_whitespace().count();

@@ -1,4 +1,4 @@
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, ToSocketAddrs};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -13,6 +13,9 @@ pub const MAX_LOCAL_FILE_SIZE: usize = 10 * 1024 * 1024; // 10 MiB ceiling
 pub enum SecurityError {
     InvalidScheme(String),
     InvalidHost(String),
+    InvalidPort(u16),
+    InvalidPath(String),
+    HostResolutionFailed(String),
     SsrfBlocked(String),
     SymlinkForbidden(PathBuf),
     PayloadTooLarge(usize),
@@ -26,6 +29,9 @@ impl std::fmt::Display for SecurityError {
         match self {
             SecurityError::InvalidScheme(s) => write!(f, "Guvenlik hatasi: gecersiz protokol {}", s),
             SecurityError::InvalidHost(h) => write!(f, "Guvenlik hatasi: gecersiz ana bilgisayar {}", h),
+            SecurityError::InvalidPort(p) => write!(f, "Guvenlik hatasi: guvensiz veya yasakli port {}", p),
+            SecurityError::InvalidPath(p) => write!(f, "Guvenlik hatasi: gecersiz dosya yolu {}", p),
+            SecurityError::HostResolutionFailed(h) => write!(f, "Guvenlik hatasi: ana bilgisayar cozumlenemedi {}", h),
             SecurityError::SsrfBlocked(ip) => write!(f, "SSRF engeli: ozel veya yerel ag erisimi yasak ({})", ip),
             SecurityError::SymlinkForbidden(p) => write!(f, "Guvenlik engeli: sembolik bag yasak ({})", p.display()),
             SecurityError::PayloadTooLarge(sz) => write!(f, "Boyut asimi: veri siniri asildi ({} bayt)", sz),
@@ -93,6 +99,10 @@ pub fn is_private_or_reserved_ipv4(ip: Ipv4Addr) -> bool {
     {
         return true;
     }
+    // 198.18.0.0/15 - Benchmarking RFC 2544
+    if octets[0] == 198 && (octets[1] == 18 || octets[1] == 19) {
+        return true;
+    }
     // 224.0.0.0/4 - Multicast
     if octets[0] >= 224 && octets[0] <= 239 {
         return true;
@@ -133,6 +143,44 @@ pub fn is_private_or_reserved_ipv6(ip: Ipv6Addr) -> bool {
     if let Some(mapped_v4) = ip.to_ipv4() {
         return is_private_or_reserved_ipv4(mapped_v4);
     }
+    // 64:ff9b::/96 - Well-Known NAT64 Prefix (RFC 6052)
+    if segments[0] == 0x0064
+        && segments[1] == 0xff9b
+        && segments[2] == 0
+        && segments[3] == 0
+        && segments[4] == 0
+        && segments[5] == 0
+    {
+        let v4 = Ipv4Addr::new(
+            (segments[6] >> 8) as u8,
+            (segments[6] & 0xff) as u8,
+            (segments[7] >> 8) as u8,
+            (segments[7] & 0xff) as u8,
+        );
+        return is_private_or_reserved_ipv4(v4);
+    }
+    // 2002::/16 - 6to4 (RFC 3056)
+    if segments[0] == 0x2002 {
+        let v4 = Ipv4Addr::new(
+            (segments[1] >> 8) as u8,
+            (segments[1] & 0xff) as u8,
+            (segments[2] >> 8) as u8,
+            (segments[2] & 0xff) as u8,
+        );
+        return is_private_or_reserved_ipv4(v4);
+    }
+    // 2001:db8::/32 - Documentation (RFC 3849)
+    if segments[0] == 0x2001 && segments[1] == 0x0db8 {
+        return true;
+    }
+    // 2001:2::/48 - Benchmarking (RFC 5180)
+    if segments[0] == 0x2001 && segments[1] == 0x0002 {
+        return true;
+    }
+    // 100::/64 - Discard-Only (RFC 6666)
+    if segments[0] == 0x0100 && segments[1] == 0 && segments[2] == 0 && segments[3] == 0 {
+        return true;
+    }
 
     false
 }
@@ -145,13 +193,20 @@ pub fn is_private_or_reserved_ip(ip: IpAddr) -> bool {
 }
 
 /// Validates target URL against SSRF, bad schemes, and forbidden hostnames.
-pub fn validate_url_ssrf(raw_url: &str) -> Result<Url, SecurityError> {
+/// Resolves DNS and returns the parsed URL along with verified public SocketAddrs.
+pub fn validate_url_ssrf_and_resolve(raw_url: &str) -> Result<(Url, Vec<std::net::SocketAddr>), SecurityError> {
     let parsed = Url::parse(raw_url)?;
 
     // Only HTTP and HTTPS schemes are allowed
     match parsed.scheme() {
         "http" | "https" => {}
         other => return Err(SecurityError::InvalidScheme(other.to_string())),
+    }
+
+    // Port restriction: Only standard HTTP/HTTPS/Web ports are allowed
+    let port = parsed.port_or_known_default().unwrap_or(80);
+    if port != 80 && port != 443 && port != 8080 && port != 8443 && port != 3000 {
+        return Err(SecurityError::InvalidPort(port));
     }
 
     let host_str = match parsed.host_str() {
@@ -172,40 +227,65 @@ pub fn validate_url_ssrf(raw_url: &str) -> Result<Url, SecurityError> {
         return Err(SecurityError::SsrfBlocked(host_str));
     }
 
+    let mut resolved_addrs = Vec::new();
+
     // If host is a direct IP
     if let Ok(ip) = host_str.parse::<IpAddr>() {
         if is_private_or_reserved_ip(ip) {
             return Err(SecurityError::SsrfBlocked(ip.to_string()));
         }
+        resolved_addrs.push(std::net::SocketAddr::new(ip, port));
     } else {
         // Resolve host to DNS and verify none of the resolved IPs are internal
-        let port = parsed.port_or_known_default().unwrap_or(80);
         let socket_str = format!("{}:{}", host_str, port);
-        if let Ok(addrs) = socket_str.to_socket_addrs() {
-            for addr in addrs {
-                if is_private_or_reserved_ip(addr.ip()) {
-                    return Err(SecurityError::SsrfBlocked(format!(
-                        "Host {} ozel IP adresine cozuldu: {}",
-                        host_str,
-                        addr.ip()
+        match socket_str.to_socket_addrs() {
+            Ok(iter) => {
+                let addrs: Vec<_> = iter.collect();
+                if addrs.is_empty() {
+                    return Err(SecurityError::HostResolutionFailed(format!(
+                        "Host {} icin cozumlenmis IP adresi bulunamadi",
+                        host_str
                     )));
                 }
+                for addr in addrs {
+                    if is_private_or_reserved_ip(addr.ip()) {
+                        return Err(SecurityError::SsrfBlocked(format!(
+                            "Host {} ozel IP adresine cozuldu: {}",
+                            host_str,
+                            addr.ip()
+                        )));
+                    }
+                    resolved_addrs.push(addr);
+                }
+            }
+            Err(e) => {
+                return Err(SecurityError::HostResolutionFailed(format!(
+                    "Host {} cozumlenemedi: {}",
+                    host_str, e
+                )));
             }
         }
     }
 
-    Ok(parsed)
+    Ok((parsed, resolved_addrs))
 }
 
-/// Fetches web content over HTTP/HTTPS with hard bounded buffer and SSRF guard.
+/// Validates target URL against SSRF, bad schemes, and forbidden hostnames.
+pub fn validate_url_ssrf(raw_url: &str) -> Result<Url, SecurityError> {
+    let (url, _) = validate_url_ssrf_and_resolve(raw_url)?;
+    Ok(url)
+}
+
+/// Fetches web content over HTTP/HTTPS with hard bounded buffer, SSRF guard, and DNS Rebinding defense.
 pub async fn fetch_bounded_content(
     url_str: &str,
     max_bytes: usize,
     timeout_secs: u64,
 ) -> Result<String, SecurityError> {
-    let validated_url = validate_url_ssrf(url_str)?;
+    let (validated_url, resolved_addrs) = validate_url_ssrf_and_resolve(url_str)?;
+    let host_str = validated_url.host_str().unwrap_or("").to_string();
 
-    let client = reqwest::Client::builder()
+    let mut client_builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
         .connect_timeout(Duration::from_secs(5))
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
@@ -223,7 +303,14 @@ pub async fn fetch_bounded_content(
         .gzip(true)
         .brotli(true)
         .deflate(true)
-        .user_agent("QuickNews/0.1 (Omarchy Linux; Text-First News Reader; +https://github.com/omarchy/quicknews)")
+        .user_agent("QuickNews/0.1 (Omarchy Linux; Text-First News Reader; +https://github.com/omarchy/quicknews)");
+
+    // Pin resolved verified public IP address to prevent DNS Rebinding (TOCTOU attacks)
+    if let Some(first_socket) = resolved_addrs.first() {
+        client_builder = client_builder.resolve(&host_str, *first_socket);
+    }
+
+    let client = client_builder
         .build()
         .map_err(|e| SecurityError::Network(e.to_string()))?;
 
@@ -256,7 +343,7 @@ pub async fn fetch_bounded_content(
 }
 
 /// Atomically writes data to a file with strict 0600 file permissions and 0700 directory permissions.
-/// Rejects symlinks unconditionally.
+/// Employs exclusive creation (O_CREAT | O_EXCL | O_NOFOLLOW) to prevent symlink following / TOCTOU attacks.
 pub fn atomic_write_file(path: &Path, data: &[u8]) -> Result<(), SecurityError> {
     let parent = path
         .parent()
@@ -288,25 +375,42 @@ pub fn atomic_write_file(path: &Path, data: &[u8]) -> Result<(), SecurityError> 
         .and_then(|s| s.to_str())
         .unwrap_or("file");
 
-    let tmp_path = parent.join(format!(".tmp_{}_{}", file_name, std::process::id()));
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
 
-    {
+    let tmp_path = parent.join(format!(".tmp_{}_{}_{:x}", file_name, std::process::id(), nanos));
+
+    // Exclusively create temporary file without following symlinks
+    let write_res = (|| -> Result<(), SecurityError> {
         let mut file = OpenOptions::new()
             .write(true)
-            .create(true)
-            .truncate(true)
+            .create_new(true)
             .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
             .open(&tmp_path)?;
 
         file.write_all(data)?;
         file.sync_all()?;
+        Ok(())
+    })();
+
+    if let Err(e) = write_res {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(e);
     }
 
-    fs::rename(&tmp_path, path)?;
+    if let Err(e) = fs::rename(&tmp_path, path) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(SecurityError::Io(e));
+    }
+
     Ok(())
 }
 
 /// Safely reads file content with strict symlink check and bounded size.
+/// Uses O_NOFOLLOW to avoid symlink TOCTOU race conditions.
 pub fn safe_read_file(path: &Path, max_bytes: usize) -> Result<Vec<u8>, SecurityError> {
     if !path.exists() {
         return Err(SecurityError::Io(std::io::Error::new(
@@ -315,12 +419,19 @@ pub fn safe_read_file(path: &Path, max_bytes: usize) -> Result<Vec<u8>, Security
         )));
     }
 
-    let meta = fs::symlink_metadata(path)?;
-    if meta.file_type().is_symlink() {
-        return Err(SecurityError::SymlinkForbidden(path.to_path_buf()));
-    }
+    // Open directly with O_NOFOLLOW to prevent symlink race attacks
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|e| {
+            if e.raw_os_error() == Some(libc::ELOOP) {
+                SecurityError::SymlinkForbidden(path.to_path_buf())
+            } else {
+                SecurityError::Io(e)
+            }
+        })?;
 
-    let file = File::open(path)?;
     let mut handle = file.take((max_bytes + 1) as u64);
     let mut buffer = Vec::new();
     handle.read_to_end(&mut buffer)?;
@@ -340,8 +451,10 @@ pub struct ProcessGroupGuard {
 impl ProcessGroupGuard {
     pub fn new(pid: u32) -> Self {
         let pgid = pid as libc::pid_t;
-        unsafe {
-            libc::setpgid(pgid, pgid);
+        if pgid > 1 {
+            unsafe {
+                libc::setpgid(pgid, pgid);
+            }
         }
         Self { pgid }
     }
@@ -353,7 +466,7 @@ impl ProcessGroupGuard {
 
 impl Drop for ProcessGroupGuard {
     fn drop(&mut self) {
-        if self.pgid > 0 {
+        if self.pgid > 1 {
             unsafe {
                 libc::killpg(self.pgid, libc::SIGTERM);
             }

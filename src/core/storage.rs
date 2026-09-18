@@ -229,16 +229,67 @@ impl StorageManager {
         target_path: Option<&std::path::Path>,
     ) -> Result<PathBuf, SecurityError> {
         let dest = if let Some(p) = target_path {
+            // Path traversal guard: reject '..' parent components
+            if p.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+                return Err(SecurityError::InvalidPath(
+                    "Hedef yolda ust dizin gecisi ('..') yasaktir".to_string(),
+                ));
+            }
+
+            let path_str = p.to_string_lossy().to_lowercase();
+            let forbidden_prefixes = [
+                "/etc", "/usr", "/boot", "/sys", "/proc", "/dev", "/bin", "/sbin", "/lib", "/var", "/run",
+            ];
+            for prefix in &forbidden_prefixes {
+                if path_str.starts_with(prefix) {
+                    return Err(SecurityError::InvalidPath(format!(
+                        "Sistem dizinlerine ('{}') disari aktarma yapilamaz",
+                        prefix
+                    )));
+                }
+            }
+
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            let forbidden_home_subdirs = [
+                format!("{}/.ssh", home),
+                format!("{}/.gnupg", home),
+                format!("{}/.config/systemd", home),
+            ];
+            for f_sub in &forbidden_home_subdirs {
+                if path_str.starts_with(&f_sub.to_lowercase()) {
+                    return Err(SecurityError::InvalidPath(
+                        "Kritik kullanici guvenlik dizinlerine disari aktarma yapilamaz".to_string(),
+                    ));
+                }
+            }
+
+            // Enforce markdown or text file extension
+            if !path_str.ends_with(".md") && !path_str.ends_with(".txt") {
+                return Err(SecurityError::InvalidPath(
+                    "Disari aktarma yalnizca .md veya .txt uzantili dosyalara yapilabilir".to_string(),
+                ));
+            }
+
             p.to_path_buf()
         } else {
             let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
             let export_dir = PathBuf::from(&home).join("Belgeler").join("QuickNews");
-            let safe_title: String = article
+            let mut safe_title: String = article
                 .title
                 .chars()
                 .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
                 .take(60)
                 .collect();
+
+            if safe_title.trim_matches('_').is_empty() {
+                let mut hash: u64 = 0xcbf29ce484222325;
+                for byte in article.source_url.bytes() {
+                    hash ^= byte as u64;
+                    hash = hash.wrapping_mul(0x100000001b3);
+                }
+                safe_title = format!("article_{:x}", hash);
+            }
+
             export_dir.join(format!("{}.md", safe_title))
         };
 

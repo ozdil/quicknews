@@ -107,6 +107,10 @@ impl AdBlocker {
     /// Strips tracking query parameters from URLs (e.g. utm_*, fbclid).
     pub fn clean_url_tracking(raw_url: &str) -> String {
         if let Ok(mut parsed) = url::Url::parse(raw_url) {
+            match parsed.scheme() {
+                "http" | "https" => {}
+                _ => return String::new(),
+            }
             let filtered: Vec<(String, String)> = parsed
                 .query_pairs()
                 .filter(|(k, _)| {

@@ -173,3 +173,142 @@ fn test_atomic_file_write_and_safe_read() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[test]
+fn test_benchmarking_and_advanced_ipv6_ssrf() {
+    use quicknews_core::core::security::{is_private_or_reserved_ipv4, is_private_or_reserved_ipv6};
+    use std::net::{Ipv4Addr, Ipv6Addr};
+
+    // RFC 2544 Benchmarking
+    assert!(is_private_or_reserved_ipv4(Ipv4Addr::new(198, 18, 0, 1)));
+    assert!(is_private_or_reserved_ipv4(Ipv4Addr::new(198, 19, 255, 254)));
+
+    // IPv6 NAT64 (RFC 6052) with embedded private/loopback IPv4
+    let nat64_loopback = "64:ff9b::127.0.0.1".parse::<Ipv6Addr>().unwrap();
+    assert!(is_private_or_reserved_ipv6(nat64_loopback));
+
+    let nat64_private = "64:ff9b::192.168.1.1".parse::<Ipv6Addr>().unwrap();
+    assert!(is_private_or_reserved_ipv6(nat64_private));
+
+    // IPv6 6to4 (RFC 3056) with embedded private IPv4
+    let six_to_four_loopback = "2002:7f00:0001::".parse::<Ipv6Addr>().unwrap();
+    assert!(is_private_or_reserved_ipv6(six_to_four_loopback));
+
+    // IPv6 Documentation & Benchmarking & Discard
+    let doc_ipv6 = "2001:db8::1".parse::<Ipv6Addr>().unwrap();
+    assert!(is_private_or_reserved_ipv6(doc_ipv6));
+
+    let bench_ipv6 = "2001:2::1".parse::<Ipv6Addr>().unwrap();
+    assert!(is_private_or_reserved_ipv6(bench_ipv6));
+
+    let discard_ipv6 = "100::1".parse::<Ipv6Addr>().unwrap();
+    assert!(is_private_or_reserved_ipv6(discard_ipv6));
+}
+
+#[test]
+fn test_port_allowlist() {
+    // Prohibited ports (SSH, Redis, SMTP)
+    assert!(validate_url_ssrf("http://127.0.0.1:22/").is_err());
+    assert!(validate_url_ssrf("http://127.0.0.1:6379/").is_err());
+    assert!(validate_url_ssrf("http://127.0.0.1:25/").is_err());
+    assert!(validate_url_ssrf("http://127.0.0.1:3306/").is_err());
+}
+
+#[test]
+fn test_export_path_traversal_guards() {
+    use quicknews_core::core::extractor::CleanArticle;
+    use quicknews_core::core::storage::StorageManager;
+    use std::path::Path;
+
+    let storage = StorageManager::new();
+    let sample_article = CleanArticle {
+        title: "Guvenlik Testi".to_string(),
+        author: None,
+        published_date: None,
+        source_url: "https://example.com/sec-test".to_string(),
+        source_name: None,
+        category: None,
+        tags: vec![],
+        content_text: "Test icerigi".to_string(),
+        word_count: 2,
+        reading_time_mins: 1,
+    };
+
+    // Reject parent dir traversal
+    let bad_parent = storage.export_article_markdown(&sample_article, Some(Path::new("../../etc/shadow")));
+    assert!(bad_parent.is_err());
+
+    // Reject system directories
+    let bad_etc = storage.export_article_markdown(&sample_article, Some(Path::new("/etc/crontab")));
+    assert!(bad_etc.is_err());
+
+    let bad_bin = storage.export_article_markdown(&sample_article, Some(Path::new("/bin/malicious.md")));
+    assert!(bad_bin.is_err());
+
+    // Reject non-markdown extension
+    let bad_ext = storage.export_article_markdown(&sample_article, Some(Path::new("/tmp/test.exe")));
+    assert!(bad_ext.is_err());
+}
+
+#[test]
+fn test_rss_xml_parsing_with_malicious_urls() {
+    let xml_with_evil_links = r#"<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0">
+        <channel>
+            <title>Saldirgan Akisi</title>
+            <item>
+                <title>Hileli Javascript</title>
+                <link>javascript:alert(document.cookie)</link>
+                <description>Zararli betik baglantisi</description>
+            </item>
+            <item>
+                <title>Yerel Dosya Saldirisi</title>
+                <link>file:///etc/passwd</link>
+                <description>Sistem dosyasi baglantisi</description>
+            </item>
+            <item>
+                <title>Dahili Port Saldirisi</title>
+                <link>http://localhost:8080/admin</link>
+                <description>SSRF baglantisi</description>
+            </item>
+            <item>
+                <title>Cloud Metadata Saldirisi</title>
+                <link>http://169.254.169.254/latest/meta-data</link>
+                <description>Cloud metadata baglantisi</description>
+            </item>
+            <item>
+                <title>Gecerli Guvenli Haber</title>
+                <link>https://example.com/haber-guvenli</link>
+                <description>Bu haber guvenli bir baglantiya sahiptir.</description>
+            </item>
+        </channel>
+    </rss>"#;
+
+    let items = FeedParser::parse_xml(xml_with_evil_links, "src_evil", "Zararli", "Teknoloji").unwrap();
+    // Tum zararli baglantilar elenmeli, yalnizca 1 adet gecerli ve guvenli haber kalmali!
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].title, "Gecerli Guvenli Haber");
+    assert_eq!(items[0].link, "https://example.com/haber-guvenli");
+}
+
+#[test]
+fn test_symlink_nofollow_rejection() {
+    let temp_dir = std::env::temp_dir().join(format!("quicknews_symtest_{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&temp_dir);
+
+    let real_file = temp_dir.join("real_target.txt");
+    let _ = std::fs::write(&real_file, b"gizli icerik");
+
+    let symlink_file = temp_dir.join("symlink_pointer.txt");
+    let _ = std::os::unix::fs::symlink(&real_file, &symlink_file);
+
+    // Reading a symlink MUST fail with SymlinkForbidden
+    let read_res = safe_read_file(&symlink_file, 1024);
+    assert!(read_res.is_err());
+
+    // Writing to a symlink MUST fail with SymlinkForbidden
+    let write_res = atomic_write_file(&symlink_file, b"yeni veri");
+    assert!(write_res.is_err());
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
