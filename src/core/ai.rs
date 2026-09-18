@@ -165,6 +165,10 @@ impl AiEngine {
             "sayfa 2 /",
             "sayfa 3 /",
             "sayfa 1 of",
+            "phoronix premium",
+            "view this site ad-free",
+            "paypal or stripe tips",
+            "thanks for your support",
         ];
 
         for line in lines {
@@ -175,9 +179,20 @@ impl AiEngine {
 
             let lower = line_trimmed.to_lowercase();
 
-            // Skip purely pagination navigation bars (e.g. "Page: 1 2 3 4 5 6 7 8 Next Page")
+            // Skip purely pagination navigation bars (e.g. "Page: 1 2 3 4 5 6 7 8 Next Page", "Page, 1, 2, 3, 4")
             if lower.starts_with("page:")
+                || lower.starts_with("pages:")
+                || lower.starts_with("page,")
                 || lower.starts_with("sayfa:")
+                || lower.starts_with("sayfalar:")
+                || lower.starts_with("sayfa,")
+                || lower.contains("page: 1 2")
+                || lower.contains("page: 1, 2")
+                || lower.contains("page 1 2 3")
+                || lower.contains("page, 1, 2")
+                || lower.contains("sayfa: 1 2")
+                || lower.contains("sayfa: 1, 2")
+                || lower.contains("sayfa 1 2 3")
                 || lower == "next page"
                 || lower == "sonraki sayfa"
                 || lower == "previous page"

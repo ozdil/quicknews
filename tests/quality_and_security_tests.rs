@@ -470,17 +470,23 @@ fn test_multi_page_concatenation_and_clutter_stripping() {
         Canonical recently began producing Ubuntu 26.10 amd64v3 daily ISOs.
         Page 1 of 4 . 32 Comments .
         Page: 1 2 3 4 Next Page
+        Page: 1, 2, 3, 4
 
         ## Sayfa 2
 
         With many of the past amd64v3 benchmarks on Phoronix it has been tested.
         Next Page
         Sonraki Sayfa
+        If you enjoyed this article consider joining Phoronix Premium to view this site ad-free.
+        PayPal or Stripe tips are also graciously accepted. Thanks for your support.
     "#;
 
     let structured = AiEngine::clean_blocks(raw_stitched);
     assert!(!structured.contains("Page: 1 2 3 4 Next Page"));
+    assert!(!structured.contains("Page: 1, 2, 3, 4"));
     assert!(!structured.contains("Sonraki Sayfa"));
+    assert!(!structured.contains("Phoronix Premium"));
+    assert!(!structured.contains("PayPal or Stripe"));
     assert!(structured.contains("Canonical recently began producing"));
     assert!(structured.contains("## Sayfa 2"));
     assert!(structured.contains("With many of the past amd64v3 benchmarks"));

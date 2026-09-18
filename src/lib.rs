@@ -72,9 +72,20 @@ impl QuickNewsApp {
 
     /// Fetches and cleans full article text (ad-free, image-free, multi-page stitched, AI structured).
     pub async fn read_clean_article(&self, url: &str) -> Result<CleanArticle, SecurityError> {
-        // Check cache first
+        // Check cache first (invalidate if stale pagination remnant exists)
         if let Some(cached) = self.storage.get_cached_content(url) {
-            return Ok(cached);
+            let lower = cached.content_text.to_lowercase();
+            let has_pagination_remnant = (lower.contains("page 1 of")
+                || lower.contains("page: 1 2")
+                || lower.contains("page, 1, 2")
+                || lower.contains("page 1 2 3")
+                || lower.contains("sayfa 1 /")
+                || lower.contains("sayfa: 1 2"))
+                && !cached.content_text.contains("## Sayfa 2");
+
+            if !has_pagination_remnant {
+                return Ok(cached);
+            }
         }
 
         // Fetch raw HTML of the first page (up to 2 MiB, SSRF guarded)
@@ -85,10 +96,22 @@ impl QuickNewsApp {
         let pagination_urls = ArticleExtractor::detect_pagination_urls(&html_content, url);
         if !pagination_urls.is_empty() {
             let mut page_index = 2;
+            let norm_title = article.title.trim().to_lowercase();
             for page_url in pagination_urls {
                 if let Ok(page_html) = fetch_bounded_content(&page_url, MAX_HTTP_PAYLOAD_SIZE, 8).await {
                     let page_article = ArticleExtractor::extract(&page_html, &page_url);
-                    let clean_page_text = page_article.content_text.trim();
+                    let mut clean_page_text = page_article.content_text.trim();
+
+                    // Strip duplicated main title from the top of the subpage
+                    let title_with_h2 = format!("## {}", article.title.trim());
+                    if clean_page_text.starts_with(&title_with_h2) {
+                        clean_page_text = clean_page_text[title_with_h2.len()..].trim();
+                    } else if clean_page_text.starts_with(article.title.trim()) {
+                        clean_page_text = clean_page_text[article.title.trim().len()..].trim();
+                    } else if clean_page_text.to_lowercase().starts_with(&norm_title) {
+                        clean_page_text = clean_page_text[norm_title.len()..].trim();
+                    }
+
                     if clean_page_text.len() > 30 && !clean_page_text.starts_with("Haber metni ayrilamadi") {
                         article.content_text.push_str(&format!("\n\n\n## Sayfa {}\n\n{}", page_index, clean_page_text));
                         page_index += 1;
