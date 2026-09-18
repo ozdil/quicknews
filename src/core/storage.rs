@@ -25,6 +25,12 @@ pub struct StorageManager {
     data_dir: PathBuf,
 }
 
+impl Default for StorageManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StorageManager {
     pub fn new() -> Self {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());

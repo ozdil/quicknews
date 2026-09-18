@@ -10,6 +10,12 @@ pub struct QuickNewsApp {
     pub storage: StorageManager,
 }
 
+impl Default for QuickNewsApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl QuickNewsApp {
     pub fn new() -> Self {
         Self {
@@ -80,7 +86,7 @@ impl QuickNewsApp {
         article.content_text = ai_structured_text;
         let word_count = article.content_text.split_whitespace().count();
         article.word_count = word_count;
-        article.reading_time_mins = if word_count == 0 { 1 } else { (word_count + 199) / 200 };
+        article.reading_time_mins = if word_count == 0 { 1 } else { word_count.div_ceil(200) };
 
         // Attach source metadata and auto-classified tags
         let existing_items = self.storage.load_articles();

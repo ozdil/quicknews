@@ -46,7 +46,7 @@ impl ArticleExtractor {
         let reading_time_mins = if word_count == 0 {
             1
         } else {
-            (word_count + 199) / 200 // standard 200 words per minute
+            word_count.div_ceil(200) // standard 200 words per minute
         };
 
         CleanArticle {
@@ -220,7 +220,7 @@ impl ArticleExtractor {
         }
 
         if tag_name == "li" {
-            let is_in_ol = element.parent().and_then(scraper::ElementRef::wrap).map_or(false, |p| p.value().name() == "ol");
+            let is_in_ol = element.parent().and_then(scraper::ElementRef::wrap).is_some_and(|p| p.value().name() == "ol");
             let text = element.text().collect::<Vec<_>>().join(" ");
             let cleaned = text.split_whitespace().collect::<Vec<_>>().join(" ");
             if !cleaned.is_empty() {

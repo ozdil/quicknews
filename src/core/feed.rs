@@ -215,7 +215,7 @@ impl FeedParser {
                             // Strip HTML tags from summary
                             let plain_summary = Self::strip_html_tags(&cur_desc);
                             let word_count = plain_summary.split_whitespace().count();
-                            let reading_time = if word_count == 0 { 1 } else { (word_count + 199) / 200 };
+                            let reading_time = if word_count == 0 { 1 } else { word_count.div_ceil(200) };
 
                             let unique_id = format!("{:x}", md5_hash(&format!("{}{}", source_id, clean_link)));
                             let auto_tags = AiEngine::auto_classify_tags(source_name, category, &clean_title, &plain_summary);

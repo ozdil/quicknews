@@ -14,12 +14,20 @@ Rectangle {
     property string searchQuery: ""
     property string statusFilter: "Tümü"
     property string timeFilter: "Tümü"
+    readonly property bool isSearchFocused: searchInput.activeFocus
 
     signal articleSelected(var article)
+    signal tagSelected(string tag)
 
     color: Theme.bgBase
     border.color: Theme.border
     border.width: 1
+
+    function clearSearch() {
+        searchInput.text = "";
+        root.searchQuery = "";
+        root.focus = true;
+    }
 
     function isSaved(id, link) {
         if (!root.savedArticles) return false;
@@ -409,11 +417,12 @@ Rectangle {
                                 model: modelData.tags ? modelData.tags : []
 
                                 Rectangle {
+                                    id: tagBadge
                                     height: 18
                                     width: tagBadgeText.implicitWidth + 10
                                     radius: 3
-                                    color: Theme.bgSurface
-                                    border.color: Theme.border
+                                    color: tagMouse.containsMouse ? Theme.bgCardHover : Theme.bgSurface
+                                    border.color: tagMouse.containsMouse ? Theme.accentCyan : Theme.border
                                     border.width: 1
 
                                     Text {
@@ -423,7 +432,18 @@ Rectangle {
                                         font.family: Theme.fontFamily
                                         font.pixelSize: 9
                                         font.bold: true
-                                        color: Theme.accentCyan
+                                        color: tagMouse.containsMouse ? Theme.accent : Theme.accentCyan
+                                    }
+
+                                    MouseArea {
+                                        id: tagMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: function(mouse) {
+                                            mouse.accepted = true;
+                                            root.tagSelected(modelData);
+                                        }
                                     }
                                 }
                             }

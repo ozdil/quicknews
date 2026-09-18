@@ -20,6 +20,7 @@ Rectangle {
     signal toggleSaveRequested(string articleUrl)
     signal toggleZenRequested()
     signal exportRequested(string articleUrl)
+    signal tagSelected(string tag)
 
     color: Theme.bgBase
     border.color: Theme.border
@@ -384,11 +385,12 @@ Rectangle {
                                    (root.currentArticle && root.currentArticle.tags ? root.currentArticle.tags : [])
 
                             Rectangle {
+                                id: rdrTagBadge
                                 height: 22
                                 width: rdrTagText.implicitWidth + 14
                                 radius: 4
-                                color: Theme.bgSurface
-                                border.color: Theme.border
+                                color: rdrTagMouse.containsMouse ? Theme.bgCardHover : Theme.bgSurface
+                                border.color: rdrTagMouse.containsMouse ? Theme.accentCyan : Theme.border
                                 border.width: 1
 
                                 Text {
@@ -398,7 +400,17 @@ Rectangle {
                                     font.family: Theme.fontFamily
                                     font.pixelSize: 10
                                     font.bold: true
-                                    color: Theme.accentCyan
+                                    color: rdrTagMouse.containsMouse ? Theme.accent : Theme.accentCyan
+                                }
+
+                                MouseArea {
+                                    id: rdrTagMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: function() {
+                                        root.tagSelected(modelData);
+                                    }
                                 }
                             }
                         }

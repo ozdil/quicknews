@@ -131,6 +131,15 @@ Rectangle {
             return;
         }
 
+        // When search input is focused, let normal text entry pass without hijacking shortcuts
+        if (headlineList.isSearchFocused) {
+            if (event.key === Qt.Key_Escape) {
+                headlineList.clearSearch();
+                event.accepted = true;
+            }
+            return;
+        }
+
         // Global shortcuts
         if (event.key === Qt.Key_J || event.key === Qt.Key_Down) {
             headlineList.selectNext();
@@ -158,6 +167,27 @@ Rectangle {
                 event.accepted = true;
             }
         }
+    }
+
+    function applyTagCategory(tag) {
+        if (!tag) return;
+        var mappedCat = tag;
+        var t = tag.toLowerCase();
+        if (t.indexOf("linux") !== -1) {
+            mappedCat = "Linux";
+        } else if (t.indexOf("teknoloji") !== -1 || t.indexOf("yapay zeka") !== -1) {
+            mappedCat = "Teknoloji";
+        } else if (t.indexOf("donanım") !== -1 || t.indexOf("donanim") !== -1) {
+            mappedCat = "Donanım";
+        } else if (t.indexOf("bilim") !== -1) {
+            mappedCat = "Bilim";
+        } else if (t.indexOf("girişim") !== -1 || t.indexOf("girisim") !== -1) {
+            mappedCat = "Girişimcilik";
+        }
+        sidebar.activeCategory = mappedCat;
+        sidebar.selectedSourceId = "";
+        headlineList.activeCategory = mappedCat;
+        headlineList.activeSourceId = "";
     }
 
     // Main 3-Pane Layout
@@ -209,6 +239,9 @@ Rectangle {
             onArticleSelected: function(art) {
                 root.loadArticleContent(art);
             }
+            onTagSelected: function(tag) {
+                root.applyTagCategory(tag);
+            }
         }
 
         // Right: Clean Distraction-Free Article Reader
@@ -237,6 +270,9 @@ Rectangle {
             }
             onExportRequested: function(url) {
                 root.exportArticle(url);
+            }
+            onTagSelected: function(tag) {
+                root.applyTagCategory(tag);
             }
         }
     }

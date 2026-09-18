@@ -200,7 +200,7 @@ impl AiEngine {
 
             // Check if line is a bullet item
             if trimmed.starts_with('-') || trimmed.starts_with('*') || trimmed.starts_with('•') || trimmed.starts_with('·') {
-                let rest = trimmed.trim_start_matches(|c| c == '-' || c == '*' || c == '•' || c == '·').trim();
+                let rest = trimmed.trim_start_matches(['-', '*', '•', '·']).trim();
                 if !rest.is_empty() {
                     clean_blocks.push(format!("- {}", rest));
                     continue;
@@ -208,7 +208,7 @@ impl AiEngine {
             }
 
             // Check if line is a numbered item (e.g. "1.", "2)")
-            let is_numbered = trimmed.chars().next().map_or(false, |c| c.is_ascii_digit())
+            let is_numbered = trimmed.chars().next().is_some_and(|c| c.is_ascii_digit())
                 && (trimmed.contains(". ") || trimmed.contains(") "));
             if is_numbered {
                 clean_blocks.push(trimmed.to_string());
@@ -226,7 +226,7 @@ impl AiEngine {
         }
 
         // Strip trailing orphaned headings that don't have body content below them
-        while clean_blocks.last().map_or(false, |b| b.starts_with("##") || b.starts_with("###")) {
+        while clean_blocks.last().is_some_and(|b| b.starts_with("##") || b.starts_with("###")) {
             clean_blocks.pop();
         }
 
@@ -250,7 +250,7 @@ impl AiEngine {
             }
 
             let is_list_item = block.starts_with("- ")
-                || (block.chars().next().map_or(false, |c| c.is_ascii_digit()) && block.contains(". "));
+                || (block.chars().next().is_some_and(|c| c.is_ascii_digit()) && block.contains(". "));
 
             if is_list_item {
                 if !in_list && !output.is_empty() {
@@ -283,6 +283,11 @@ impl AiEngine {
         } else {
             output
         }
+    }
+
+    /// Alias helper to clean and format content blocks
+    pub fn clean_blocks(text: &str) -> String {
+        Self::local_structure_full_article("", text)
     }
 
     /// Automatically fixes punctuation spacing (e.g. "suçladı.Çin" -> "suçladı. Çin")
@@ -319,7 +324,7 @@ impl AiEngine {
         let mut current_p = String::new();
         let mut sentence_count = 0;
 
-        let parts = cleaned.split_inclusive(|c| c == '.' || c == '!' || c == '?');
+        let parts = cleaned.split_inclusive(['.', '!', '?']);
         for part in parts {
             current_p.push_str(part);
             let trimmed = part.trim();
@@ -355,8 +360,9 @@ impl AiEngine {
 
         let combined = format!("{} {} {}", title, text, source_name).to_lowercase();
 
-        if combined.contains("yapay zeka")
+        if (combined.contains("yapay zeka")
             || combined.contains("yapay zekâ")
+            || combined.contains("ai")
             || combined.contains(" ai ")
             || combined.contains("llm")
             || combined.contains("gemini")
@@ -366,14 +372,13 @@ impl AiEngine {
             || combined.contains("anthropic")
             || combined.contains("qwen")
             || combined.contains("deepseek")
-            || combined.contains("makine öğrenimi")
+            || combined.contains("makine öğrenimi"))
+            && !tags.iter().any(|t| t == "Yapay Zeka")
         {
-            if !tags.iter().any(|t| t == "Yapay Zeka") {
-                tags.push("Yapay Zeka".to_string());
-            }
+            tags.push("Yapay Zeka".to_string());
         }
 
-        if combined.contains("donanım")
+        if (combined.contains("donanım")
             || combined.contains("donanim")
             || combined.contains("işlemci")
             || combined.contains("islemci")
@@ -386,14 +391,13 @@ impl AiEngine {
             || combined.contains("intel")
             || combined.contains("amd")
             || combined.contains("nvidia")
-            || combined.contains("anakart")
+            || combined.contains("anakart"))
+            && !tags.iter().any(|t| t == "Donanım")
         {
-            if !tags.iter().any(|t| t == "Donanım") {
-                tags.push("Donanım".to_string());
-            }
+            tags.push("Donanım".to_string());
         }
 
-        if combined.contains("siber")
+        if (combined.contains("siber")
             || combined.contains("güvenlik")
             || combined.contains("guvenlik")
             || combined.contains("hacker")
@@ -402,28 +406,26 @@ impl AiEngine {
             || combined.contains("malware")
             || combined.contains("fidye")
             || combined.contains("zafiyet")
-            || combined.contains("açık")
+            || combined.contains("açık"))
+            && !tags.iter().any(|t| t == "Siber Güvenlik")
         {
-            if !tags.iter().any(|t| t == "Siber Güvenlik") {
-                tags.push("Siber Güvenlik".to_string());
-            }
+            tags.push("Siber Güvenlik".to_string());
         }
 
-        if combined.contains("iphone")
+        if (combined.contains("iphone")
             || combined.contains("apple")
             || combined.contains("android")
             || combined.contains("samsung")
             || combined.contains("ios")
             || combined.contains("xiaomi")
             || combined.contains("akıllı telefon")
-            || combined.contains("telefon")
+            || combined.contains("telefon"))
+            && !tags.iter().any(|t| t == "Mobil")
         {
-            if !tags.iter().any(|t| t == "Mobil") {
-                tags.push("Mobil".to_string());
-            }
+            tags.push("Mobil".to_string());
         }
 
-        if combined.contains("linux")
+        if (combined.contains("linux")
             || combined.contains("açık kaynak")
             || combined.contains("acik kaynak")
             || combined.contains("kernel")
@@ -431,50 +433,46 @@ impl AiEngine {
             || combined.contains("arch")
             || combined.contains("fedora")
             || combined.contains("gnome")
-            || combined.contains("omarchy")
+            || combined.contains("omarchy"))
+            && !tags.iter().any(|t| t == "Açık Kaynak")
         {
-            if !tags.iter().any(|t| t == "Açık Kaynak") {
-                tags.push("Açık Kaynak".to_string());
-            }
+            tags.push("Açık Kaynak".to_string());
         }
 
-        if combined.contains("oyun")
+        if (combined.contains("oyun")
             || combined.contains("steam")
             || combined.contains("playstation")
             || combined.contains("xbox")
             || combined.contains("nintendo")
-            || combined.contains("game")
+            || combined.contains("game"))
+            && !tags.iter().any(|t| t == "Oyun")
         {
-            if !tags.iter().any(|t| t == "Oyun") {
-                tags.push("Oyun".to_string());
-            }
+            tags.push("Oyun".to_string());
         }
 
-        if combined.contains("girişim")
+        if (combined.contains("girişim")
             || combined.contains("girisim")
             || combined.contains("startup")
             || combined.contains("yatırım")
             || combined.contains("yatirim")
             || combined.contains("değerleme")
             || combined.contains("fon")
-            || combined.contains("fintech")
+            || combined.contains("fintech"))
+            && !tags.iter().any(|t| t == "Girişimcilik")
         {
-            if !tags.iter().any(|t| t == "Girişimcilik") {
-                tags.push("Girişimcilik".to_string());
-            }
+            tags.push("Girişimcilik".to_string());
         }
 
-        if combined.contains("uzay")
+        if (combined.contains("uzay")
             || combined.contains("nasa")
             || combined.contains("bilim")
             || combined.contains("fizik")
             || combined.contains("evrim")
             || combined.contains("biyoloji")
-            || combined.contains("teleskop")
+            || combined.contains("teleskop"))
+            && !tags.iter().any(|t| t == "Bilim")
         {
-            if !tags.iter().any(|t| t == "Bilim") {
-                tags.push("Bilim".to_string());
-            }
+            tags.push("Bilim".to_string());
         }
 
         if tags.is_empty() {
@@ -511,7 +509,7 @@ impl AiEngine {
     /// Local extractive NLP summarizer: extracts the top 3 most informative sentences.
     pub fn local_extractive_summary(title: &str, content: &str) -> AiSummaryResult {
         let word_count = content.split_whitespace().count();
-        let reading_time = if word_count == 0 { 1 } else { (word_count + 199) / 200 };
+        let reading_time = if word_count == 0 { 1 } else { word_count.div_ceil(200) };
 
         // Neutralize title: remove exclamation marks, clickbait prefixes
         let mut clean_title = title.trim().to_string();
@@ -569,12 +567,12 @@ impl AiEngine {
             .collect();
 
         // Sort descending by score
-        scored_sentences.sort_by(|a, b| b.0.cmp(&a.0));
+        scored_sentences.sort_by_key(|a| std::cmp::Reverse(a.0));
 
         let top_count = std::cmp::min(3, scored_sentences.len());
         let mut bullets = Vec::new();
-        for i in 0..top_count {
-            bullets.push(format!("{}.", scored_sentences[i].1));
+        for item in scored_sentences.iter().take(top_count) {
+            bullets.push(format!("{}.", item.1));
         }
 
         AiSummaryResult {
@@ -846,7 +844,7 @@ impl AiEngine {
             }
             if let Ok(parsed) = serde_json::from_str::<Partial>(text) {
                 let word_count = content.split_whitespace().count();
-                let reading_time = if word_count == 0 { 1 } else { (word_count + 199) / 200 };
+                let reading_time = if word_count == 0 { 1 } else { word_count.div_ceil(200) };
                 return Ok(AiSummaryResult {
                     neutral_title: parsed.neutral_title,
                     key_points: parsed.key_points,
@@ -907,7 +905,7 @@ impl AiEngine {
             }
             if let Ok(parsed) = serde_json::from_str::<Partial>(resp_str) {
                 let word_count = content.split_whitespace().count();
-                let reading_time = if word_count == 0 { 1 } else { (word_count + 199) / 200 };
+                let reading_time = if word_count == 0 { 1 } else { word_count.div_ceil(200) };
                 return Ok(AiSummaryResult {
                     neutral_title: parsed.neutral_title,
                     key_points: parsed.key_points,
