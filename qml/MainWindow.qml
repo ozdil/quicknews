@@ -85,25 +85,34 @@ Rectangle {
         root.isLoadingContent = true;
         root.readBuffer = "";
 
-        // Mark as read in frontend model immediately (so it drops from unread filter)
+        // Read clean text (Keep article visible in unread list until explicitly dismissed)
+        readProc.command = [root.engineBin, "read", "--", article.link, "--json"];
+        readProc.running = true;
+    }
+
+    function dismissArticle(idOrLink) {
+        if (!idOrLink) return;
+
+        // 1. Mark as read in frontend model so it drops from 'Okunmamış' list
         for (var i = 0; i < root.articlesList.length; i++) {
-            if (root.articlesList[i].id === article.id) {
+            if (root.articlesList[i].id === idOrLink || root.articlesList[i].link === idOrLink) {
                 root.articlesList[i].is_read = true;
                 break;
             }
         }
         root.articlesList = root.articlesList.slice();
-        if (root.selectedArticle) {
-            root.selectedArticle.is_read = true;
+
+        // 2. Clear right pane reader content immediately (asıl içerik ve sol başlık birlikte uçar!)
+        if (root.selectedArticle && (root.selectedArticle.id === idOrLink || root.selectedArticle.link === idOrLink)) {
+            root.selectedArticle = null;
+            root.fullCleanArticle = null;
+            root.aiSummaryData = null;
+            root.isLoadingContent = false;
         }
 
-        // Mark as read in engine
-        markReadProc.command = [root.engineBin, "mark-read", "--", article.id];
+        // 3. Mark as read in engine
+        markReadProc.command = [root.engineBin, "mark-read", "--", idOrLink];
         markReadProc.running = true;
-
-        // Read clean text
-        readProc.command = [root.engineBin, "read", "--", article.link, "--json"];
-        readProc.running = true;
     }
 
     function toggleReadArticle(idOrLink) {
@@ -120,7 +129,13 @@ Rectangle {
         }
         if (found) {
             root.articlesList = root.articlesList.slice();
-            if (root.selectedArticle && (root.selectedArticle.id === idOrLink || root.selectedArticle.link === idOrLink)) {
+            // If the dismissed article was open in the reader and became read, dismiss reader content
+            if (newState && root.selectedArticle && (root.selectedArticle.id === idOrLink || root.selectedArticle.link === idOrLink)) {
+                root.selectedArticle = null;
+                root.fullCleanArticle = null;
+                root.aiSummaryData = null;
+                root.isLoadingContent = false;
+            } else if (root.selectedArticle && (root.selectedArticle.id === idOrLink || root.selectedArticle.link === idOrLink)) {
                 root.selectedArticle.is_read = newState;
             }
         }
@@ -325,6 +340,9 @@ Rectangle {
             }
             onToggleReadRequested: function(artId) {
                 root.toggleReadArticle(artId);
+            }
+            onDismissArticleRequested: function(artId) {
+                root.dismissArticle(artId);
             }
             onToggleZenRequested: {
                 root.isZenMode = !root.isZenMode;

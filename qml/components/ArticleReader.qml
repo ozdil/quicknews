@@ -19,6 +19,7 @@ Rectangle {
     signal openExternalRequested(string articleUrl)
     signal toggleSaveRequested(string articleUrl)
     signal toggleReadRequested(string articleId)
+    signal dismissArticleRequested(string articleId)
     signal toggleZenRequested()
     signal exportRequested(string articleUrl)
     signal tagSelected(string tag)
@@ -180,22 +181,36 @@ Rectangle {
                 }
             }
 
-            // Read / Unread toggle button
+            // Prominent Okundu Yap Toolbar Button
             Rectangle {
                 visible: root.currentArticle !== null
-                width: 28
                 height: 28
+                width: markReadToolbarRow.implicitWidth + 16
                 radius: Theme.radiusSm
-                color: readToggleToolbarMouse.containsMouse ? Theme.bgCardHover : Theme.bgSurface
-                border.color: (root.currentArticle && root.currentArticle.is_read) ? Theme.accentGreen : (readToggleToolbarMouse.containsMouse ? Theme.accent : "transparent")
+                color: readToggleToolbarMouse.containsMouse ? Theme.accentGreen : Theme.bgSurface
+                border.color: Theme.accentGreen
                 border.width: 1
 
-                Text {
+                RowLayout {
+                    id: markReadToolbarRow
                     anchors.centerIn: parent
-                    text: (root.currentArticle && root.currentArticle.is_read) ? Theme.iconCheckCircle : Theme.iconCircleOutline
-                    font.family: Theme.iconFont
-                    font.pixelSize: 12
-                    color: (root.currentArticle && root.currentArticle.is_read) ? Theme.accentGreen : (readToggleToolbarMouse.containsMouse ? Theme.textMain : Theme.textMuted)
+                    spacing: 6
+
+                    Text {
+                        text: Theme.iconCheck
+                        font.family: Theme.iconFont
+                        font.pixelSize: 11
+                        font.bold: true
+                        color: readToggleToolbarMouse.containsMouse ? Theme.bgDark : Theme.accentGreen
+                    }
+
+                    Text {
+                        text: "Okundu Yap"
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+                        font.bold: true
+                        color: readToggleToolbarMouse.containsMouse ? Theme.bgDark : Theme.textMain
+                    }
                 }
 
                 MouseArea {
@@ -205,7 +220,7 @@ Rectangle {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         if (root.currentArticle) {
-                            root.toggleReadRequested(root.currentArticle.id);
+                            root.dismissArticleRequested(root.currentArticle.id);
                         }
                     }
                 }
@@ -564,7 +579,104 @@ Rectangle {
                         textFormat: TextEdit.MarkdownText
                     }
 
-                    Item { height: 40 }
+                    // End-of-article completion and mark-as-read action box
+                    Rectangle {
+                        visible: root.currentArticle !== null && !root.isLoadingContent
+                        Layout.fillWidth: true
+                        height: 68
+                        radius: Theme.radiusMd
+                        color: Theme.bgSurface
+                        border.color: Theme.accentGreen
+                        border.width: 1
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 16
+                            anchors.rightMargin: 16
+                            spacing: 14
+
+                            Rectangle {
+                                width: 36
+                                height: 36
+                                radius: 18
+                                color: Theme.bgDark
+                                border.color: Theme.accentGreen
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: Theme.iconCheck
+                                    font.family: Theme.iconFont
+                                    font.pixelSize: 16
+                                    color: Theme.accentGreen
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+
+                                Text {
+                                    text: "Haberi tamamladiniz"
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                    color: Theme.textMain
+                                }
+
+                                Text {
+                                    text: "Okundu olarak isaretleyip listeden kaldirin"
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: 11
+                                    color: Theme.textDim
+                                }
+                            }
+
+                            Rectangle {
+                                id: markReadActionBtn
+                                height: 36
+                                width: markReadActionText.implicitWidth + 28
+                                radius: Theme.radiusSm
+                                color: markReadActionMouse.containsMouse ? Theme.accentHover : Theme.accentGreen
+
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+
+                                    Text {
+                                        text: Theme.iconCheck
+                                        font.family: Theme.iconFont
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        color: Theme.bgDark
+                                    }
+
+                                    Text {
+                                        id: markReadActionText
+                                        text: "Okundu Olarak Isaretle"
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        color: Theme.bgDark
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: markReadActionMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (root.currentArticle) {
+                                            root.dismissArticleRequested(root.currentArticle.id);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Item { height: 60 }
                 }
             }
         }
