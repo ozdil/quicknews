@@ -44,7 +44,7 @@ elif [[ "${1:-}" == "--status" || "${1:-}" == "status" ]]; then
     exec "${BIN}" status
 elif [[ $# -gt 0 ]]; then
     case "${1:-}" in
-        sync|list|read|summarize|sources|add-prompt|add-source|remove-source|mark-read)
+        sync|list|read|summarize|sources|add-prompt|add-source|remove-source|mark-read|save|unsave|toggle-save|saved|export)
             exec "${BIN}" "$@"
             ;;
     esac

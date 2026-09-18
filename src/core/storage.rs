@@ -45,6 +45,10 @@ impl StorageManager {
         self.data_dir.join("articles.json")
     }
 
+    pub fn saved_path(&self) -> PathBuf {
+        self.data_dir.join("saved.json")
+    }
+
     pub fn content_cache_path(&self, url: &str) -> PathBuf {
         let mut hash: u64 = 0xcbf29ce484222325;
         for byte in url.bytes() {
@@ -165,6 +169,89 @@ impl StorageManager {
         let json = serde_json::to_vec_pretty(article)
             .map_err(|e| SecurityError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))?;
         atomic_write_file(&p, &json)
+    }
+
+    pub fn load_saved(&self) -> Vec<FeedItem> {
+        let p = self.saved_path();
+        if !p.exists() {
+            return Vec::new();
+        }
+        if let Ok(bytes) = safe_read_file(&p, MAX_LOCAL_FILE_SIZE) {
+            if let Ok(items) = serde_json::from_slice::<Vec<FeedItem>>(&bytes) {
+                return items;
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn save_article_bookmark(&self, item: &FeedItem) -> Result<bool, SecurityError> {
+        let mut saved = self.load_saved();
+        if saved.iter().any(|s| s.id == item.id || s.link == item.link) {
+            return Ok(false); // Already saved
+        }
+        let mut new_item = item.clone();
+        new_item.is_read = true;
+        saved.insert(0, new_item);
+        let json = serde_json::to_vec_pretty(&saved)
+            .map_err(|e| SecurityError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))?;
+        atomic_write_file(&self.saved_path(), &json)?;
+        Ok(true)
+    }
+
+    pub fn remove_saved_article(&self, id_or_link: &str) -> Result<bool, SecurityError> {
+        let mut saved = self.load_saved();
+        let orig_len = saved.len();
+        saved.retain(|s| s.id != id_or_link && s.link != id_or_link);
+        if saved.len() != orig_len {
+            let json = serde_json::to_vec_pretty(&saved)
+                .map_err(|e| SecurityError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))?;
+            atomic_write_file(&self.saved_path(), &json)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn is_article_saved(&self, id_or_link: &str) -> bool {
+        let saved = self.load_saved();
+        saved.iter().any(|s| s.id == id_or_link || s.link == id_or_link)
+    }
+
+    pub fn export_article_markdown(
+        &self,
+        article: &CleanArticle,
+        target_path: Option<&std::path::Path>,
+    ) -> Result<PathBuf, SecurityError> {
+        let dest = if let Some(p) = target_path {
+            p.to_path_buf()
+        } else {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            let export_dir = PathBuf::from(&home).join("Belgeler").join("QuickNews");
+            let safe_title: String = article
+                .title
+                .chars()
+                .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+                .take(60)
+                .collect();
+            export_dir.join(format!("{}.md", safe_title))
+        };
+
+        let mut md = String::new();
+        md.push_str(&format!("# {}\n\n", article.title));
+        if let Some(ref auth) = article.author {
+            md.push_str(&format!("**Yazar:** {}\n\n", auth));
+        }
+        if let Some(ref date) = article.published_date {
+            md.push_str(&format!("**Tarih:** {}\n\n", date));
+        }
+        md.push_str(&format!("**Kaynak:** {}\n\n", article.source_url));
+        md.push_str(&format!("**Okuma Suresi:** ~{} dakika\n\n", article.reading_time_mins));
+        md.push_str("---\n\n");
+        md.push_str(&article.content_text);
+        md.push('\n');
+
+        atomic_write_file(&dest, md.as_bytes())?;
+        Ok(dest)
     }
 
     fn default_sources() -> Vec<SourceConfig> {

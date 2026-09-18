@@ -220,6 +220,9 @@ pub async fn fetch_bounded_content(
                 }
             }
         }))
+        .gzip(true)
+        .brotli(true)
+        .deflate(true)
         .user_agent("QuickNews/0.1 (Omarchy Linux; Text-First News Reader; +https://github.com/omarchy/quicknews)")
         .build()
         .map_err(|e| SecurityError::Network(e.to_string()))?;
@@ -249,9 +252,7 @@ pub async fn fetch_bounded_content(
         body_bytes.extend_from_slice(&chunk);
     }
 
-    String::from_utf8(body_bytes).map_err(|_| {
-        SecurityError::Network("Icerik gecerli UTF-8 metin karakterleri icermiyor".to_string())
-    })
+    Ok(String::from_utf8_lossy(&body_bytes).to_string())
 }
 
 /// Atomically writes data to a file with strict 0600 file permissions and 0700 directory permissions.

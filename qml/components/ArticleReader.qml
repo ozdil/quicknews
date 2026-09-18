@@ -12,9 +12,14 @@ Rectangle {
     property bool isLoadingContent: false
     property bool isLoadingAi: false
     property int readerFontSize: 14
+    property bool isSaved: false
+    property bool isZenMode: false
 
     signal summarizeRequested(string articleUrl)
     signal openExternalRequested(string articleUrl)
+    signal toggleSaveRequested(string articleUrl)
+    signal toggleZenRequested()
+    signal exportRequested(string articleUrl)
 
     color: Theme.bgBase
     border.color: Theme.border
@@ -170,6 +175,88 @@ Rectangle {
                             root.openExternalRequested(root.currentArticle.link);
                         }
                     }
+                }
+            }
+
+            // Bookmark / Save button
+            Rectangle {
+                visible: root.currentArticle !== null
+                width: 28
+                height: 28
+                radius: Theme.radiusSm
+                color: bmMouse.containsMouse ? Theme.bgCardHover : Theme.bgSurface
+
+                Text {
+                    anchors.centerIn: parent
+                    text: root.isSaved ? Theme.iconBookmark : Theme.iconBookmarkOutline
+                    font.family: Theme.iconFont
+                    font.pixelSize: 12
+                    color: root.isSaved ? Theme.accentOrange : (bmMouse.containsMouse ? Theme.accent : Theme.textMuted)
+                }
+
+                MouseArea {
+                    id: bmMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root.currentArticle && root.currentArticle.link) {
+                            root.toggleSaveRequested(root.currentArticle.link);
+                        }
+                    }
+                }
+            }
+
+            // Export to Markdown button
+            Rectangle {
+                visible: root.currentArticle !== null && root.fullCleanArticle !== null
+                width: 28
+                height: 28
+                radius: Theme.radiusSm
+                color: expMouse.containsMouse ? Theme.bgCardHover : Theme.bgSurface
+
+                Text {
+                    anchors.centerIn: parent
+                    text: Theme.iconExport
+                    font.family: Theme.iconFont
+                    font.pixelSize: 12
+                    color: expMouse.containsMouse ? Theme.accentCyan : Theme.textMuted
+                }
+
+                MouseArea {
+                    id: expMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root.currentArticle && root.currentArticle.link) {
+                            root.exportRequested(root.currentArticle.link);
+                        }
+                    }
+                }
+            }
+
+            // Zen / Focus Mode toggle button
+            Rectangle {
+                width: 28
+                height: 28
+                radius: Theme.radiusSm
+                color: root.isZenMode ? Theme.accent : (zenMouse.containsMouse ? Theme.bgCardHover : Theme.bgSurface)
+
+                Text {
+                    anchors.centerIn: parent
+                    text: root.isZenMode ? Theme.iconCompress : Theme.iconExpand
+                    font.family: Theme.iconFont
+                    font.pixelSize: 12
+                    color: root.isZenMode ? Theme.bgDark : (zenMouse.containsMouse ? Theme.accent : Theme.textMuted)
+                }
+
+                MouseArea {
+                    id: zenMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.toggleZenRequested()
                 }
             }
         }

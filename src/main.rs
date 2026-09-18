@@ -178,6 +178,76 @@ async fn main() {
             let _ = app.storage.mark_article_read(&args[2]);
             println!("OK");
         }
+        "save" => {
+            if args.len() < 3 {
+                eprintln!("Kullanim: quicknews-engine save <HaberID veya Link>");
+                std::process::exit(1);
+            }
+            let target = &args[2];
+            let articles = app.storage.load_articles();
+            if let Some(item) = articles.iter().find(|a| a.id == *target || a.link == *target) {
+                let _ = app.storage.save_article_bookmark(item);
+                println!("OK");
+            } else {
+                println!("Haber bulunamadi");
+            }
+        }
+        "unsave" => {
+            if args.len() < 3 {
+                eprintln!("Kullanim: quicknews-engine unsave <HaberID veya Link>");
+                std::process::exit(1);
+            }
+            let _ = app.storage.remove_saved_article(&args[2]);
+            println!("OK");
+        }
+        "toggle-save" => {
+            if args.len() < 3 {
+                eprintln!("Kullanim: quicknews-engine toggle-save <HaberID veya Link>");
+                std::process::exit(1);
+            }
+            let (is_saved, ok) = app.toggle_save_article(&args[2]);
+            let res = serde_json::json!({
+                "saved": is_saved,
+                "success": ok
+            });
+            println!("{}", res);
+        }
+        "saved" => {
+            let is_json = args.iter().any(|a| a == "--json");
+            let saved = app.load_saved_articles();
+            if is_json {
+                println!("{}", serde_json::to_string(&saved).unwrap_or_default());
+            } else {
+                println!("=== Kaydedilen Haberler ({} haber) ===", saved.len());
+                for (i, art) in saved.iter().enumerate() {
+                    println!("{:2}. [{}] {} ({})", i + 1, art.source_name, art.title, art.link);
+                }
+            }
+        }
+        "export" => {
+            if args.len() < 3 {
+                eprintln!("Kullanim: quicknews-engine export <URL> [--out <DosyaYolu>]");
+                std::process::exit(1);
+            }
+            let url = &args[2];
+            let out_idx = args.iter().position(|a| a == "--out").map(|i| i + 1);
+            let target_path = if let Some(idx) = out_idx {
+                if idx < args.len() {
+                    Some(std::path::Path::new(&args[idx]))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            match app.export_article_to_markdown(url, target_path).await {
+                Ok(path) => println!("Haber basariyla disari aktarildi: {}", path.display()),
+                Err(e) => {
+                    eprintln!("Disa aktarma hatasi: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
         "status" => {
             let sources = app.storage.load_sources().unwrap_or_default();
             let articles = app.storage.load_articles();

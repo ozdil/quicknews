@@ -10,6 +10,7 @@ Rectangle {
 
     property var sourcesList: []
     property var articlesList: []
+    property var savedArticlesList: []
     property var selectedArticle: null
     property var fullCleanArticle: null
     property var aiSummaryData: null
@@ -19,18 +20,31 @@ Rectangle {
     property bool isAddingPrompt: false
     property string promptStatus: ""
     property bool showAddModal: false
+    property bool isZenMode: false
 
     color: Theme.bgDark
+    focus: true
 
     readonly property string engineBin: {
-        var localBin = Quickshell.env("HOME") + "/.local/bin/quicknews-engine";
-        var cwdBin = Quickshell.env("PWD") + "/target/release/quicknews-engine";
-        return cwdBin;
+        var home = Quickshell.env("HOME");
+        return (home ? home : "") + "/.local/bin/quicknews-engine";
+    }
+
+    readonly property bool isCurrentArticleSaved: {
+        if (!root.selectedArticle || !root.savedArticlesList) return false;
+        for (var i = 0; i < root.savedArticlesList.length; i++) {
+            if (root.savedArticlesList[i].id === root.selectedArticle.id ||
+                root.savedArticlesList[i].link === root.selectedArticle.link) {
+                return true;
+            }
+        }
+        return false;
     }
 
     Component.onCompleted: {
         loadSources();
         loadArticles();
+        loadSavedArticles();
     }
 
     function loadSources() {
@@ -41,6 +55,11 @@ Rectangle {
     function loadArticles() {
         articlesProc.command = [root.engineBin, "list", "--json"];
         articlesProc.running = true;
+    }
+
+    function loadSavedArticles() {
+        savedProc.command = [root.engineBin, "saved", "--json"];
+        savedProc.running = true;
     }
 
     function syncFeeds() {
@@ -64,6 +83,18 @@ Rectangle {
         readProc.running = true;
     }
 
+    function toggleSaveArticle(idOrLink) {
+        if (!idOrLink) return;
+        toggleSaveProc.command = [root.engineBin, "toggle-save", idOrLink];
+        toggleSaveProc.running = true;
+    }
+
+    function exportArticle(url) {
+        if (!url) return;
+        exportProc.command = [root.engineBin, "export", url, "--json"];
+        exportProc.running = true;
+    }
+
     function requestAiSummary(url) {
         root.isLoadingAi = true;
         summaryProc.command = [root.engineBin, "summarize", url, "--json"];
@@ -77,6 +108,45 @@ Rectangle {
         addPromptProc.running = true;
     }
 
+    // Keyboard navigation and shortcuts
+    Keys.onPressed: function(event) {
+        if (root.showAddModal) {
+            if (event.key === Qt.Key_Escape) {
+                root.showAddModal = false;
+                event.accepted = true;
+            }
+            return;
+        }
+
+        // Global shortcuts
+        if (event.key === Qt.Key_J || event.key === Qt.Key_Down) {
+            headlineList.selectNext();
+            event.accepted = true;
+        } else if (event.key === Qt.Key_K || event.key === Qt.Key_Up) {
+            headlineList.selectPrev();
+            event.accepted = true;
+        } else if (event.key === Qt.Key_F) {
+            root.isZenMode = !root.isZenMode;
+            event.accepted = true;
+        } else if (event.key === Qt.Key_S) {
+            if (root.selectedArticle) {
+                root.toggleSaveArticle(root.selectedArticle.id);
+            }
+            event.accepted = true;
+        } else if (event.key === Qt.Key_R) {
+            root.syncFeeds();
+            event.accepted = true;
+        } else if (event.key === Qt.Key_Slash) {
+            headlineList.focusSearch();
+            event.accepted = true;
+        } else if (event.key === Qt.Key_Escape) {
+            if (root.isZenMode) {
+                root.isZenMode = false;
+                event.accepted = true;
+            }
+        }
+    }
+
     // Main 3-Pane Layout
     RowLayout {
         anchors.fill: parent
@@ -85,9 +155,10 @@ Rectangle {
         // Left: Source and Category Sidebar
         SourceSidebar {
             id: sidebar
+            visible: !root.isZenMode
             Layout.fillHeight: true
-            Layout.preferredWidth: 250
-            Layout.minimumWidth: 220
+            Layout.preferredWidth: root.isZenMode ? 0 : 250
+            Layout.minimumWidth: root.isZenMode ? 0 : 220
             sources: root.sourcesList
             unreadCount: {
                 var c = 0;
@@ -114,10 +185,12 @@ Rectangle {
         // Center: Article Headlines List
         HeadlineList {
             id: headlineList
+            visible: !root.isZenMode
             Layout.fillHeight: true
-            Layout.preferredWidth: 380
-            Layout.minimumWidth: 320
+            Layout.preferredWidth: root.isZenMode ? 0 : 380
+            Layout.minimumWidth: root.isZenMode ? 0 : 320
             articles: root.articlesList
+            savedArticles: root.savedArticlesList
             selectedArticleId: root.selectedArticle ? root.selectedArticle.id : ""
             onArticleSelected: function(art) {
                 root.loadArticleContent(art);
@@ -134,11 +207,22 @@ Rectangle {
             aiSummary: root.aiSummaryData
             isLoadingContent: root.isLoadingContent
             isLoadingAi: root.isLoadingAi
+            isSaved: root.isCurrentArticleSaved
+            isZenMode: root.isZenMode
             onSummarizeRequested: function(url) {
                 root.requestAiSummary(url);
             }
             onOpenExternalRequested: function(url) {
                 Qt.openUrlExternally(url);
+            }
+            onToggleSaveRequested: function(url) {
+                root.toggleSaveArticle(url);
+            }
+            onToggleZenRequested: {
+                root.isZenMode = !root.isZenMode;
+            }
+            onExportRequested: function(url) {
+                root.exportArticle(url);
             }
         }
     }
@@ -181,6 +265,17 @@ Rectangle {
     }
 
     Process {
+        id: savedProc
+        stdout: SplitParser {
+            onRead: function(data) {
+                try {
+                    root.savedArticlesList = JSON.parse(data);
+                } catch(e) {}
+            }
+        }
+    }
+
+    Process {
         id: syncProc
         stdout: SplitParser {
             onRead: function(data) {
@@ -188,6 +283,25 @@ Rectangle {
                     root.articlesList = JSON.parse(data);
                 } catch(e) {}
                 root.isSyncing = false;
+                root.loadSavedArticles();
+            }
+        }
+    }
+
+    Process {
+        id: toggleSaveProc
+        onExited: function(exitCode) {
+            root.loadSavedArticles();
+        }
+    }
+
+    Process {
+        id: exportProc
+        stdout: SplitParser {
+            onRead: function(data) {
+                try {
+                    var res = JSON.parse(data);
+                } catch(e) {}
             }
         }
     }

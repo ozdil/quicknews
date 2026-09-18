@@ -114,6 +114,26 @@ impl AiEngine {
             "bu makale sana ne hissettirdi",
             "soru & cevap",
             "this work is an exact translation",
+            "yorum yaz",
+            "paylaş tweetle",
+            "paylas tweetle",
+            "eposta ile paylaşın",
+            "eposta ile paylasin",
+            "arkadaşınıza postalayın",
+            "arkadasiniza postalayin",
+            "gelişmiş mobil uygulamamızı",
+            "gelismis mobil uygulamamizi",
+            "mobil uygulamamızı kullanarak",
+            "mobil uygulamamizi kullanarak",
+            "haber bildirimlerini aç",
+            "haber bildirimlerini ac",
+            "whatsapp kanalımıza katılın",
+            "whatsapp kanalimiza katilin",
+            "telegram kanalımıza katılın",
+            "telegram kanalimiza katilin",
+            "instagram takip et",
+            "video bitince sonrakine geç",
+            "video bitince sonrakine gec",
         ];
 
         for line in lines {
@@ -337,7 +357,13 @@ impl AiEngine {
             results.push(DiscoveredSource {
                 name: "DonanimHaber".to_string(),
                 domain: "donanimhaber.com".to_string(),
-                suggested_feed: Some("https://www.donanimhaber.com/rss/tum-haberler".to_string()),
+                suggested_feed: Some("https://www.donanimhaber.com/rss/tum/".to_string()),
+                category: "Teknoloji".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "Webtekno".to_string(),
+                domain: "webtekno.com".to_string(),
+                suggested_feed: Some("https://www.webtekno.com/rss.xml".to_string()),
                 category: "Teknoloji".to_string(),
             });
             results.push(DiscoveredSource {
@@ -353,6 +379,12 @@ impl AiEngine {
                 category: "Teknoloji".to_string(),
             });
             results.push(DiscoveredSource {
+                name: "Hardware Plus".to_string(),
+                domain: "hwp.com.tr".to_string(),
+                suggested_feed: Some("https://hwp.com.tr/feed".to_string()),
+                category: "Donanim".to_string(),
+            });
+            results.push(DiscoveredSource {
                 name: "CHIP Turkiye".to_string(),
                 domain: "chip.com.tr".to_string(),
                 suggested_feed: Some("https://www.chip.com.tr/rss".to_string()),
@@ -365,9 +397,21 @@ impl AiEngine {
                 category: "Girisimcilik".to_string(),
             });
             results.push(DiscoveredSource {
+                name: "Egirisim".to_string(),
+                domain: "egirisim.com".to_string(),
+                suggested_feed: Some("https://egirisim.com/feed/".to_string()),
+                category: "Girisimcilik".to_string(),
+            });
+            results.push(DiscoveredSource {
                 name: "Donanim Arsivi".to_string(),
                 domain: "donanimarsivi.com".to_string(),
                 suggested_feed: Some("https://donanimarsivi.com/feed/".to_string()),
+                category: "Donanim".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "Donanim Gunlugu".to_string(),
+                domain: "donanimgunlugu.com".to_string(),
+                suggested_feed: Some("https://donanimgunlugu.com/feed".to_string()),
                 category: "Donanim".to_string(),
             });
             results.push(DiscoveredSource {

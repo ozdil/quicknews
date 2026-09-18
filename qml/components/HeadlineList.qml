@@ -7,16 +7,27 @@ Rectangle {
     id: root
 
     property var articles: []
+    property var savedArticles: []
     property string activeCategory: "Tümü"
     property string activeSourceId: ""
     property string selectedArticleId: ""
     property string searchQuery: ""
+    property string statusFilter: "Tümü"
+    property string timeFilter: "Tümü"
 
     signal articleSelected(var article)
 
     color: Theme.bgBase
     border.color: Theme.border
     border.width: 1
+
+    function isSaved(id, link) {
+        if (!root.savedArticles) return false;
+        for (var i = 0; i < root.savedArticles.length; i++) {
+            if (root.savedArticles[i].id === id || root.savedArticles[i].link === link) return true;
+        }
+        return false;
+    }
 
     function getFilteredArticles() {
         if (!root.articles || root.articles.length === 0) return [];
@@ -31,6 +42,21 @@ Rectangle {
             if (root.activeSourceId && a.source_id !== root.activeSourceId) {
                 continue;
             }
+            if (root.statusFilter === "Okunmamış" && a.is_read) {
+                continue;
+            }
+            if (root.statusFilter === "Kaydedilenler" && !root.isSaved(a.id, a.link)) {
+                continue;
+            }
+            if (root.timeFilter === "< 3 dk" && a.reading_time_mins >= 3) {
+                continue;
+            }
+            if (root.timeFilter === "3-6 dk" && (a.reading_time_mins < 3 || a.reading_time_mins > 6)) {
+                continue;
+            }
+            if (root.timeFilter === "> 6 dk" && a.reading_time_mins <= 6) {
+                continue;
+            }
             if (q.length > 0) {
                 var matchTitle = a.title && a.title.toLowerCase().indexOf(q) !== -1;
                 var matchSummary = a.summary && a.summary.toLowerCase().indexOf(q) !== -1;
@@ -40,6 +66,47 @@ Rectangle {
             res.push(a);
         }
         return res;
+    }
+
+    function focusSearch() {
+        searchInput.forceActiveFocus();
+        searchInput.selectAll();
+    }
+
+    function selectNext() {
+        var list = getFilteredArticles();
+        if (list.length === 0) return;
+        var curIdx = -1;
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].id === root.selectedArticleId) {
+                curIdx = i;
+                break;
+            }
+        }
+        var nextIdx = curIdx + 1;
+        if (nextIdx < list.length) {
+            root.selectedArticleId = list[nextIdx].id;
+            root.articleSelected(list[nextIdx]);
+            articleListView.positionViewAtIndex(nextIdx, ListView.Contain);
+        }
+    }
+
+    function selectPrev() {
+        var list = getFilteredArticles();
+        if (list.length === 0) return;
+        var curIdx = -1;
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].id === root.selectedArticleId) {
+                curIdx = i;
+                break;
+            }
+        }
+        var prevIdx = curIdx - 1;
+        if (prevIdx >= 0) {
+            root.selectedArticleId = list[prevIdx].id;
+            root.articleSelected(list[prevIdx]);
+            articleListView.positionViewAtIndex(prevIdx, ListView.Contain);
+        }
     }
 
     ColumnLayout {
@@ -106,6 +173,85 @@ Rectangle {
                     }
                 }
             }
+        }
+
+        // Status Filter Tabs (Tumu, Okunmamis, Kaydedilenler)
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 6
+
+            Repeater {
+                model: ["Tümü", "Okunmamış", "Kaydedilenler"]
+
+                Rectangle {
+                    height: 24
+                    Layout.fillWidth: true
+                    radius: Theme.radiusSm
+                    color: root.statusFilter === modelData ? Theme.accent : (tabMouse.containsMouse ? Theme.bgCardHover : Theme.bgSurface)
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: modelData
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 10
+                        font.bold: root.statusFilter === modelData
+                        color: root.statusFilter === modelData ? Theme.bgDark : Theme.textMain
+                    }
+
+                    MouseArea {
+                        id: tabMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.statusFilter = modelData
+                    }
+                }
+            }
+        }
+
+        // Reading Time Filter Pills (< 3 dk, 3-6 dk, > 6 dk)
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 4
+
+            Text {
+                text: Theme.iconClock
+                font.family: Theme.iconFont
+                font.pixelSize: 10
+                color: Theme.textDim
+            }
+
+            Repeater {
+                model: ["Tümü", "< 3 dk", "3-6 dk", "> 6 dk"]
+
+                Rectangle {
+                    width: timeTxt.implicitWidth + 12
+                    height: 20
+                    radius: Theme.radiusSm
+                    color: root.timeFilter === modelData ? Theme.bgCard : (tMouse.containsMouse ? Theme.bgCardHover : "transparent")
+                    border.color: root.timeFilter === modelData ? Theme.accentCyan : Theme.border
+                    border.width: 1
+
+                    Text {
+                        id: timeTxt
+                        anchors.centerIn: parent
+                        text: modelData
+                        font.family: Theme.fontFamily
+                        font.pixelSize: 9
+                        color: root.timeFilter === modelData ? Theme.accentCyan : Theme.textMuted
+                    }
+
+                    MouseArea {
+                        id: tMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.timeFilter = modelData
+                    }
+                }
+            }
+
+            Item { Layout.fillWidth: true }
         }
 
         // Article count header

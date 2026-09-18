@@ -48,9 +48,9 @@ impl QuickNewsApp {
         let mut all_articles = new_items;
         all_articles.extend(existing);
 
-        // Cap total cached articles to 200 to keep memory small and snappy
-        if all_articles.len() > 200 {
-            all_articles.truncate(200);
+        // Cap total cached articles to 500 to keep memory small and snappy
+        if all_articles.len() > 500 {
+            all_articles.truncate(500);
         }
 
         let _ = self.storage.save_articles(&all_articles);
@@ -111,5 +111,36 @@ impl QuickNewsApp {
         }
 
         added
+    }
+
+    /// Toggles bookmark / saved status of an article by ID or URL.
+    pub fn toggle_save_article(&self, id_or_link: &str) -> (bool, bool) {
+        if self.storage.is_article_saved(id_or_link) {
+            let ok = self.storage.remove_saved_article(id_or_link).unwrap_or(false);
+            (false, ok)
+        } else {
+            let articles = self.storage.load_articles();
+            if let Some(item) = articles.iter().find(|a| a.id == id_or_link || a.link == id_or_link) {
+                let ok = self.storage.save_article_bookmark(item).unwrap_or(false);
+                (true, ok)
+            } else {
+                (false, false)
+            }
+        }
+    }
+
+    /// Loads all bookmarked / saved articles.
+    pub fn load_saved_articles(&self) -> Vec<FeedItem> {
+        self.storage.load_saved()
+    }
+
+    /// Exports full clean article to Markdown file.
+    pub async fn export_article_to_markdown(
+        &self,
+        url: &str,
+        target_path: Option<&std::path::Path>,
+    ) -> Result<std::path::PathBuf, SecurityError> {
+        let clean = self.read_clean_article(url).await?;
+        self.storage.export_article_markdown(&clean, target_path)
     }
 }
