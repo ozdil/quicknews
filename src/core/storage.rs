@@ -137,10 +137,29 @@ impl StorageManager {
     pub fn remove_source(&self, id_or_domain: &str) -> Result<bool, SecurityError> {
         let mut sources = self.load_sources().unwrap_or_default();
         let orig_len = sources.len();
+        let removed_ids: Vec<String> = sources
+            .iter()
+            .filter(|s| s.id == id_or_domain || s.domain.eq_ignore_ascii_case(id_or_domain))
+            .map(|s| s.id.clone())
+            .collect();
+
         sources.retain(|s| s.id != id_or_domain && !s.domain.eq_ignore_ascii_case(id_or_domain));
 
         if sources.len() != orig_len {
             self.save_sources(&sources)?;
+
+            // Clean up cached articles belonging to removed sources
+            let mut articles = self.load_articles();
+            let art_orig_len = articles.len();
+            articles.retain(|a| {
+                !removed_ids.contains(&a.source_id)
+                    && !a.source_id.eq_ignore_ascii_case(id_or_domain)
+                    && !a.source_name.eq_ignore_ascii_case(id_or_domain)
+            });
+            if articles.len() != art_orig_len {
+                let _ = self.save_articles(&articles);
+            }
+
             Ok(true)
         } else {
             Ok(false)
@@ -389,39 +408,107 @@ impl StorageManager {
     }
 
     fn default_sources() -> Vec<SourceConfig> {
-        vec![
-            SourceConfig {
-                id: "src_1".to_string(),
-                name: "Webrazzi".to_string(),
-                domain: "webrazzi.com".to_string(),
-                feed_url: "https://webrazzi.com/feed/".to_string(),
-                category: "Teknoloji".to_string(),
-                enabled: true,
-            },
-            SourceConfig {
-                id: "src_2".to_string(),
-                name: "ShiftDelete".to_string(),
-                domain: "shiftdelete.net".to_string(),
-                feed_url: "https://shiftdelete.net/feed".to_string(),
-                category: "Teknoloji".to_string(),
-                enabled: true,
-            },
-            SourceConfig {
-                id: "src_3".to_string(),
-                name: "Phoronix".to_string(),
-                domain: "phoronix.com".to_string(),
-                feed_url: "https://www.phoronix.com/rss.php".to_string(),
-                category: "Linux & Donanim".to_string(),
-                enabled: true,
-            },
-            SourceConfig {
-                id: "src_4".to_string(),
-                name: "Evrim Agaci".to_string(),
-                domain: "evrimagaci.org".to_string(),
-                feed_url: "https://evrimagaci.org/rss.xml".to_string(),
-                category: "Bilim".to_string(),
-                enabled: true,
-            },
-        ]
+        let is_turkish = std::env::var("LC_ALL")
+            .or_else(|_| std::env::var("LC_MESSAGES"))
+            .or_else(|_| std::env::var("LANG"))
+            .map(|l| l.to_lowercase().starts_with("tr"))
+            .unwrap_or(false);
+
+        if is_turkish {
+            vec![
+                SourceConfig {
+                    id: "src_1".to_string(),
+                    name: "Webrazzi".to_string(),
+                    domain: "webrazzi.com".to_string(),
+                    feed_url: "https://webrazzi.com/feed/".to_string(),
+                    category: "Teknoloji".to_string(),
+                    enabled: true,
+                },
+                SourceConfig {
+                    id: "src_2".to_string(),
+                    name: "ShiftDelete".to_string(),
+                    domain: "shiftdelete.net".to_string(),
+                    feed_url: "https://shiftdelete.net/feed".to_string(),
+                    category: "Teknoloji".to_string(),
+                    enabled: true,
+                },
+                SourceConfig {
+                    id: "src_3".to_string(),
+                    name: "Phoronix".to_string(),
+                    domain: "phoronix.com".to_string(),
+                    feed_url: "https://www.phoronix.com/rss.php".to_string(),
+                    category: "Linux & Donanim".to_string(),
+                    enabled: true,
+                },
+                SourceConfig {
+                    id: "src_4".to_string(),
+                    name: "Evrim Agaci".to_string(),
+                    domain: "evrimagaci.org".to_string(),
+                    feed_url: "https://evrimagaci.org/rss.xml".to_string(),
+                    category: "Bilim".to_string(),
+                    enabled: true,
+                },
+                SourceConfig {
+                    id: "src_5".to_string(),
+                    name: "Haberler.com Yerel".to_string(),
+                    domain: "haberler.com".to_string(),
+                    feed_url: "https://rss.haberler.com/rss.asp?kategori=yerel".to_string(),
+                    category: "Yerel".to_string(),
+                    enabled: true,
+                },
+                SourceConfig {
+                    id: "src_6".to_string(),
+                    name: "Yeni Asir".to_string(),
+                    domain: "yeniasir.com.tr".to_string(),
+                    feed_url: "https://www.yeniasir.com.tr/rss/anasayfa.xml".to_string(),
+                    category: "Yerel".to_string(),
+                    enabled: true,
+                },
+            ]
+        } else {
+            // Default English (US) sources
+            vec![
+                SourceConfig {
+                    id: "src_1".to_string(),
+                    name: "Phoronix".to_string(),
+                    domain: "phoronix.com".to_string(),
+                    feed_url: "https://www.phoronix.com/rss.php".to_string(),
+                    category: "Linux".to_string(),
+                    enabled: true,
+                },
+                SourceConfig {
+                    id: "src_2".to_string(),
+                    name: "Ars Technica".to_string(),
+                    domain: "arstechnica.com".to_string(),
+                    feed_url: "https://feeds.arstechnica.com/arstechnica/index".to_string(),
+                    category: "Technology".to_string(),
+                    enabled: true,
+                },
+                SourceConfig {
+                    id: "src_3".to_string(),
+                    name: "Hacker News".to_string(),
+                    domain: "news.ycombinator.com".to_string(),
+                    feed_url: "https://news.ycombinator.com/rss".to_string(),
+                    category: "Startups".to_string(),
+                    enabled: true,
+                },
+                SourceConfig {
+                    id: "src_4".to_string(),
+                    name: "NASA Breaking News".to_string(),
+                    domain: "nasa.gov".to_string(),
+                    feed_url: "https://www.nasa.gov/news-release/feed/".to_string(),
+                    category: "Science".to_string(),
+                    enabled: true,
+                },
+                SourceConfig {
+                    id: "src_5".to_string(),
+                    name: "NPR News".to_string(),
+                    domain: "npr.org".to_string(),
+                    feed_url: "https://feeds.npr.org/1001/rss.xml".to_string(),
+                    category: "General".to_string(),
+                    enabled: true,
+                },
+            ]
+        }
     }
 }

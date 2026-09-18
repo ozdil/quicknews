@@ -76,7 +76,7 @@ impl AiEngine {
     }
 
     /// Local rule-based structural formatter preserving all paragraphs and lists.
-    pub fn local_structure_full_article(_title: &str, raw_text: &str) -> String {
+    pub fn local_structure_full_article(title: &str, raw_text: &str) -> String {
         let lines: Vec<&str> = raw_text.lines().collect();
         let mut clean_blocks: Vec<String> = Vec::new();
 
@@ -211,6 +211,31 @@ impl AiEngine {
                 && clean_blocks.len() >= 2
             {
                 break;
+            }
+
+            // Skip duplicate title at the beginning of the article
+            if clean_blocks.is_empty() {
+                let norm_title = title.trim().to_lowercase();
+                let strip_h = lower.trim_start_matches('#').trim();
+                if !norm_title.is_empty() && (strip_h == norm_title || norm_title.starts_with(strip_h) || strip_h.starts_with(&norm_title)) {
+                    continue;
+                }
+            }
+
+            // Skip leftover author metadata and relative timestamps (e.g. "Tuğçe İçözü 18 saat önce")
+            if (lower.ends_with("saat önce")
+                || lower.ends_with("saat once")
+                || lower.ends_with("dakika önce")
+                || lower.ends_with("dakika once")
+                || lower.ends_with("gün önce")
+                || lower.ends_with("gun once")
+                || lower.starts_with("yazar:")
+                || lower.starts_with("yazan:")
+                || lower.starts_with("editör:")
+                || lower.starts_with("editor:"))
+                && line_trimmed.len() < 50
+            {
+                continue;
             }
 
             let is_clutter = clutter_signatures.iter().any(|&sig| lower.contains(sig));
@@ -688,33 +713,21 @@ impl AiEngine {
 
         if is_local {
             results.push(DiscoveredSource {
-                name: "Istanbul Bulteni".to_string(),
-                domain: "ibb.istanbul".to_string(),
-                suggested_feed: Some("https://www.ibb.istanbul/rss".to_string()),
+                name: "Haberler Yerel".to_string(),
+                domain: "haberler.com".to_string(),
+                suggested_feed: Some("https://rss.haberler.com/rss.asp?kategori=yerel".to_string()),
                 category: "Yerel".to_string(),
             });
             results.push(DiscoveredSource {
-                name: "IHA Yerel".to_string(),
-                domain: "iha.com.tr".to_string(),
-                suggested_feed: Some("https://www.iha.com.tr/rss".to_string()),
+                name: "Yeni Asir".to_string(),
+                domain: "yeniasir.com.tr".to_string(),
+                suggested_feed: Some("https://www.yeniasir.com.tr/rss/anasayfa.xml".to_string()),
                 category: "Yerel".to_string(),
             });
             results.push(DiscoveredSource {
                 name: "Bursa Hakimiyet".to_string(),
                 domain: "bursahakimiyet.com.tr".to_string(),
                 suggested_feed: Some("https://www.bursahakimiyet.com.tr/rss".to_string()),
-                category: "Yerel".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Ege Telgraf".to_string(),
-                domain: "egetelgraf.com".to_string(),
-                suggested_feed: Some("https://www.egetelgraf.com/rss".to_string()),
-                category: "Yerel".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Baskent Gazetesi".to_string(),
-                domain: "baskentgazete.com.tr".to_string(),
-                suggested_feed: Some("https://www.baskentgazete.com.tr/rss".to_string()),
                 category: "Yerel".to_string(),
             });
         } else if is_politics || is_general {
@@ -743,9 +756,9 @@ impl AiEngine {
                 category: "Siyaset".to_string(),
             });
             results.push(DiscoveredSource {
-                name: "T24".to_string(),
-                domain: "t24.com.tr".to_string(),
-                suggested_feed: Some("https://t24.com.tr/rss".to_string()),
+                name: "Diken".to_string(),
+                domain: "diken.com.tr".to_string(),
+                suggested_feed: Some("https://www.diken.com.tr/feed/".to_string()),
                 category: "Siyaset".to_string(),
             });
             results.push(DiscoveredSource {
@@ -842,7 +855,7 @@ impl AiEngine {
             results.push(DiscoveredSource {
                 name: "BTK Haber".to_string(),
                 domain: "btk.gov.tr".to_string(),
-                suggested_feed: Some("https://www.btk.gov.tr/rss/haberler.xml".to_string()),
+                suggested_feed: Some("https://www.btk.gov.tr/rss/news".to_string()),
                 category: "Bilisim".to_string(),
             });
             results.push(DiscoveredSource {

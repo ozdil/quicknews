@@ -165,10 +165,13 @@ async fn main() {
                 eprintln!("Kullanim: quicknews-engine add-source <Isim> <Domain> <FeedURL> <Kategori>");
                 std::process::exit(1);
             }
-            match app.storage.add_source(filtered[0], filtered[1], filtered[2], filtered[3]) {
-                Ok(true) => println!("Kaynak basariyla eklendi."),
+            match app.add_source_verified(filtered[0], filtered[1], filtered[2], filtered[3]).await {
+                Ok(true) => println!("Kaynak basariyla dogrulandi ve eklendi."),
                 Ok(false) => println!("Bu kaynak zaten mevcut."),
-                Err(e) => eprintln!("Kaynak ekleme hatasi: {}", e),
+                Err(e) => {
+                    eprintln!("Kaynak ekleme hatasi: {}", e);
+                    std::process::exit(1);
+                }
             }
         }
         "remove-source" => {

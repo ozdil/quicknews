@@ -29,8 +29,10 @@ impl QuickNewsApp {
         let mut tasks = Vec::new();
 
         for src in sources.into_iter().filter(|s| s.enabled) {
+            let s_name = src.name.clone();
             tasks.push(tokio::spawn(async move {
-                FeedParser::fetch_feed_items(&src.feed_url, &src.id, &src.name, &src.category).await
+                let res = FeedParser::fetch_feed_items(&src.feed_url, &src.id, &src.name, &src.category).await;
+                (s_name, res)
             }));
         }
 
@@ -40,11 +42,22 @@ impl QuickNewsApp {
 
         let mut new_items = Vec::new();
         for task in tasks {
-            if let Ok(Ok(items)) = task.await {
-                for item in items {
-                    if !existing_ids.contains(&item.id) {
-                        existing_ids.insert(item.id.clone());
-                        new_items.push(item);
+            if let Ok((name, res)) = task.await {
+                match res {
+                    Ok(items) => {
+                        let count = items.len();
+                        for item in items {
+                            if !existing_ids.contains(&item.id) {
+                                existing_ids.insert(item.id.clone());
+                                new_items.push(item);
+                            }
+                        }
+                        if count > 0 {
+                            eprintln!("[QuickNews] '{}' kaynagindan {} haber alindi.", name, count);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[QuickNews] '{}' kaynagi cekilemedi: {}", name, e);
                     }
                 }
             }
@@ -61,9 +74,9 @@ impl QuickNewsApp {
             }
         }
 
-        // Cap total cached articles to 500 to keep memory small and snappy
-        if all_articles.len() > 500 {
-            all_articles.truncate(500);
+        // Cap total cached articles to 1500 to keep memory small and snappy
+        if all_articles.len() > 1500 {
+            all_articles.truncate(1500);
         }
 
         let _ = self.storage.save_articles(&all_articles);
@@ -145,30 +158,81 @@ impl QuickNewsApp {
         Ok(article)
     }
 
-    /// Natural language source discovery and auto-addition.
+    /// Adds a source only if it provides a functional RSS/Atom XML feed.
+    /// Rejects dead/non-RSS links and probes for working alternative feeds before giving up.
+    pub async fn add_source_verified(
+        &self,
+        name: &str,
+        domain: &str,
+        feed_url: &str,
+        category: &str,
+    ) -> Result<bool, SecurityError> {
+        match FeedParser::verify_feed_endpoint(feed_url).await {
+            Ok(_) => self.storage.add_source(name, domain, feed_url, category),
+            Err(orig_err) => {
+                let site_target = format!("https://{}", domain);
+                if let Ok(discovered) = FeedParser::discover_feed_url(&site_target).await {
+                    if FeedParser::verify_feed_endpoint(&discovered).await.is_ok() {
+                        eprintln!(
+                            "[QuickNews] '{}' adresi gecersizdi, ancak guncel XML beslemesi bulundu: '{}'",
+                            feed_url, discovered
+                        );
+                        return self.storage.add_source(name, domain, &discovered, category);
+                    }
+                }
+                Err(SecurityError::Network(format!(
+                    "Guncel RSS/Atom XML teknolojisi sunmayan kaynak eklenmedi: {}",
+                    orig_err
+                )))
+            }
+        }
+    }
+
+    /// Natural language source discovery and auto-addition with strict XML feed verification.
     pub async fn discover_and_add_sources(&self, prompt: &str) -> Vec<DiscoveredSource> {
         let candidates = AiEngine::discover_sources_from_prompt(prompt).await;
         let mut added = Vec::new();
 
         for mut candidate in candidates {
-            // If suggested feed is missing or unverified, run auto-discovery
-            let feed_url = if let Some(ref sf) = candidate.suggested_feed {
-                sf.clone()
+            let initial_feed = candidate.suggested_feed.clone();
+
+            let valid_feed = if let Some(ref sf) = initial_feed {
+                if FeedParser::verify_feed_endpoint(sf).await.is_ok() {
+                    Some(sf.clone())
+                } else {
+                    let site_target = format!("https://{}", candidate.domain);
+                    match FeedParser::discover_feed_url(&site_target).await {
+                        Ok(discovered) if FeedParser::verify_feed_endpoint(&discovered).await.is_ok() => Some(discovered),
+                        _ => None,
+                    }
+                }
             } else {
                 let site_target = format!("https://{}", candidate.domain);
                 match FeedParser::discover_feed_url(&site_target).await {
-                    Ok(url) => url,
-                    Err(_) => continue,
+                    Ok(discovered) if FeedParser::verify_feed_endpoint(&discovered).await.is_ok() => Some(discovered),
+                    _ => None,
                 }
             };
 
-            candidate.suggested_feed = Some(feed_url.clone());
+            // If no working RSS/Atom XML technology found, DO NOT ADD ("ekleme yapmasin")
+            let verified_url = match valid_feed {
+                Some(url) => url,
+                None => {
+                    eprintln!(
+                        "[QuickNews] '{}' ({}) guncel bir RSS/Atom XML akisi sunmadigi icin eklenmedi.",
+                        candidate.name, candidate.domain
+                    );
+                    continue;
+                }
+            };
+
+            candidate.suggested_feed = Some(verified_url.clone());
 
             // Add source to storage
             if let Ok(true) = self.storage.add_source(
                 &candidate.name,
                 &candidate.domain,
-                &feed_url,
+                &verified_url,
                 &candidate.category,
             ) {
                 added.push(candidate);

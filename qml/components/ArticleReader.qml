@@ -24,6 +24,10 @@ Rectangle {
     signal exportRequested(string articleUrl)
     signal tagSelected(string tag)
 
+    function formatDate(rawDate) {
+        return I18n.formatDate(rawDate);
+    }
+
     color: Theme.bgBase
     border.color: Theme.border
     border.width: 1
@@ -46,7 +50,7 @@ Rectangle {
             }
 
             Text {
-                text: "SAF METIN OKUYUCU"
+                text: I18n.t("pure_text_reader")
                 font.family: Theme.fontFamily
                 font.pixelSize: 11
                 font.bold: true
@@ -76,7 +80,7 @@ Rectangle {
                     }
 
                     Text {
-                        text: root.isLoadingAi ? "Ozetleniyor..." : "Yapay Zeka Ozeti"
+                        text: root.isLoadingAi ? I18n.t("summarizing") : I18n.t("ai_summary")
                         font.family: Theme.fontFamily
                         font.pixelSize: 11
                         font.bold: true
@@ -205,7 +209,7 @@ Rectangle {
                     }
 
                     Text {
-                        text: "Okundu Yap"
+                        text: I18n.t("mark_read")
                         font.family: Theme.fontFamily
                         font.pixelSize: 10
                         font.bold: true
@@ -336,7 +340,7 @@ Rectangle {
 
                 Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "Okumak istediginiz haberi listeden secin"
+                    text: I18n.t("empty_reader_title")
                     font.family: Theme.fontFamily
                     font.pixelSize: 14
                     color: Theme.textMuted
@@ -344,7 +348,7 @@ Rectangle {
 
                 Text {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "Sifir reklam • Sifir resim • Tamamen saf metin"
+                    text: I18n.t("empty_reader_sub")
                     font.family: Theme.fontFamily
                     font.pixelSize: 11
                     color: Theme.textDim
@@ -362,16 +366,16 @@ Rectangle {
             Flickable {
                 id: flickable
                 contentWidth: flickable.width
-                contentHeight: readerCol.implicitHeight + 60
+                contentHeight: readerCol.implicitHeight + 80
                 boundsBehavior: Flickable.StopAtBounds
 
                 ColumnLayout {
                     id: readerCol
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.leftMargin: 20
-                    anchors.rightMargin: 20
-                    spacing: 16
+                    width: Math.min(flickable.width - 48, 880)
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: 16
+                    spacing: 20
 
                     // Article Title (Clean, Bold, Large)
                     Text {
@@ -379,6 +383,8 @@ Rectangle {
                         font.family: Theme.fontFamily
                         font.pixelSize: root.readerFontSize + 8
                         font.bold: true
+                        lineHeight: 1.3
+                        lineHeightMode: Text.ProportionalHeight
                         color: Theme.textMain
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
@@ -406,15 +412,15 @@ Rectangle {
                         }
 
                         Text {
-                            visible: root.fullCleanArticle && root.fullCleanArticle.published_date
-                            text: "• " + (root.fullCleanArticle ? root.fullCleanArticle.published_date : "")
+                            visible: (root.fullCleanArticle && root.fullCleanArticle.published_date) || (root.currentArticle && root.currentArticle.published_date)
+                            text: "• " + root.formatDate(root.fullCleanArticle && root.fullCleanArticle.published_date ? root.fullCleanArticle.published_date : (root.currentArticle ? root.currentArticle.published_date : ""))
                             font.family: Theme.fontFamily
                             font.pixelSize: 11
                             color: Theme.textDim
                         }
 
                         Text {
-                            text: "• " + (root.fullCleanArticle ? root.fullCleanArticle.reading_time_mins : (root.currentArticle ? root.currentArticle.reading_time_mins : 1)) + " dk okuma"
+                            text: "• " + (root.fullCleanArticle ? root.fullCleanArticle.reading_time_mins : (root.currentArticle ? root.currentArticle.reading_time_mins : 1)) + " " + I18n.t("min_read")
                             font.family: Theme.fontFamily
                             font.pixelSize: 11
                             color: Theme.accentGreen
@@ -493,7 +499,7 @@ Rectangle {
                                 }
 
                                 Text {
-                                    text: "YAPAY ZEKA HABER ANALIZI"
+                                    text: I18n.t("ai_analysis")
                                     font.family: Theme.fontFamily
                                     font.pixelSize: 11
                                     font.bold: true
@@ -505,7 +511,7 @@ Rectangle {
                             // Neutral Title
                             Text {
                                 visible: root.aiSummary && root.aiSummary.neutral_title
-                                text: "Notr Baslik: " + (root.aiSummary ? root.aiSummary.neutral_title : "")
+                                text: I18n.t("neutral_headline") + (root.aiSummary ? root.aiSummary.neutral_title : "")
                                 font.family: Theme.fontFamily
                                 font.pixelSize: 12
                                 font.bold: true
@@ -558,7 +564,7 @@ Rectangle {
                         }
 
                         Text {
-                            text: "Haberin reklamsiz ve saf metni cikariliyor..."
+                            text: I18n.t("extracting_content")
                             font.family: Theme.fontFamily
                             font.pixelSize: 12
                             color: Theme.accent
@@ -566,17 +572,17 @@ Rectangle {
                     }
 
                     // Clean Article Body Text (Pure typography, high readability, markdown formatted)
-                    TextEdit {
+                    Text {
                         id: contentTextEdit
                         Layout.fillWidth: true
                         text: (root.fullCleanArticle && root.fullCleanArticle.content_text) ? root.fullCleanArticle.content_text : (root.currentArticle ? root.currentArticle.summary : "")
                         font.family: Theme.fontFamily
                         font.pixelSize: root.readerFontSize
+                        lineHeight: 1.6
+                        lineHeightMode: Text.ProportionalHeight
                         color: Theme.textMain
                         wrapMode: Text.WordWrap
-                        readOnly: true
-                        selectByMouse: true
-                        textFormat: TextEdit.MarkdownText
+                        textFormat: Text.MarkdownText
                     }
 
                     // End-of-article completion and mark-as-read action box
@@ -617,7 +623,7 @@ Rectangle {
                                 spacing: 2
 
                                 Text {
-                                    text: "Haberi tamamladiniz"
+                                    text: I18n.t("article_completed")
                                     font.family: Theme.fontFamily
                                     font.pixelSize: 13
                                     font.bold: true
@@ -625,7 +631,7 @@ Rectangle {
                                 }
 
                                 Text {
-                                    text: "Okundu olarak isaretleyip listeden kaldirin"
+                                    text: I18n.t("article_completed_sub")
                                     font.family: Theme.fontFamily
                                     font.pixelSize: 11
                                     color: Theme.textDim
@@ -653,7 +659,7 @@ Rectangle {
 
                                     Text {
                                         id: markReadActionText
-                                        text: "Okundu Olarak Isaretle"
+                                        text: I18n.t("mark_read_btn")
                                         font.family: Theme.fontFamily
                                         font.pixelSize: 12
                                         font.bold: true

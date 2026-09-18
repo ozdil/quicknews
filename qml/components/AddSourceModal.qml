@@ -54,7 +54,7 @@ Rectangle {
                 }
 
                 Text {
-                    text: "Yapay Zeka ile Kaynak Ekle"
+                    text: I18n.t("modal_title")
                     font.family: Theme.fontFamily
                     font.pixelSize: 15
                     font.bold: true
@@ -78,7 +78,7 @@ Rectangle {
             }
 
             Text {
-                text: "URL veya RSS adresiyle ugrasmayin. Eklemek istediginiz haber sitelerini dogal dille yazin, yapay zeka siteleri bulup akislarini otomatik baglasin."
+                text: I18n.t("modal_sub")
                 font.family: Theme.fontFamily
                 font.pixelSize: 11
                 color: Theme.textMuted
@@ -117,7 +117,7 @@ Rectangle {
 
                         Text {
                             anchors.fill: parent
-                            text: "Orn: Turkiye'deki en iyi teknoloji sayfalarindan 10 tanesini ekle"
+                            text: I18n.t("modal_input_placeholder")
                             font.family: Theme.fontFamily
                             font.pixelSize: 12
                             color: Theme.textDim
@@ -129,7 +129,7 @@ Rectangle {
 
             // Quick Example Prompts
             Text {
-                text: "HAZIR ORNEKLER (Tiklayarak secin):"
+                text: (I18n.currentLanguage === "en") ? "QUICK EXAMPLES (Click to select):" : "HAZIR ORNEKLER (Tiklayarak secin):"
                 font.family: Theme.fontFamily
                 font.pixelSize: 9
                 font.bold: true
@@ -141,7 +141,15 @@ Rectangle {
                 spacing: 6
 
                 Repeater {
-                    model: [
+                    model: (I18n.currentLanguage === "en") ? [
+                        "Add top US technology news and AI blogs",
+                        "Add Linux, kernel and open-source tech sources",
+                        "Add Austin and Texas local news",
+                        "Add science and space exploration sites",
+                        "Add global economics and market news",
+                        "Add hardware and PC enthusiast media",
+                        "Add startup and venture capital portals"
+                    ] : [
                         "Turkiye gundemi ve siyasi haber kaynaklarini ekle",
                         "Guvenilir genel haber gazeteleri ve ajanslarini ekle",
                         "Istanbul, Ankara ve yerel sehir haberlerini ekle",
@@ -224,7 +232,7 @@ Rectangle {
                     }
 
                     Text {
-                        text: root.isSearching ? "Siteler Araniyor ve Dogrulaniyor..." : "Kaynaklari Bul ve Ekle"
+                        text: root.isSearching ? I18n.t("modal_searching") : I18n.t("modal_submit")
                         font.family: Theme.fontFamily
                         font.pixelSize: 12
                         font.bold: true

@@ -165,9 +165,45 @@ Rectangle {
     function submitPromptAdd(promptText) {
         root.isAddingPrompt = true;
         root.promptBuffer = "";
-        root.promptStatus = "Yapay zeka kaynaklari analiz ediyor ve RSS akislarini dogruluyor...";
+        root.promptStatus = I18n.t("modal_searching");
         addPromptProc.command = [root.engineBin, "add-prompt", "--", promptText, "--json"];
         addPromptProc.running = true;
+    }
+
+    function removeSource(idOrDomain) {
+        if (!idOrDomain) return;
+
+        // 1. Optimistic removal from frontend lists
+        var updatedSources = [];
+        for (var i = 0; i < root.sourcesList.length; i++) {
+            if (root.sourcesList[i].id !== idOrDomain && root.sourcesList[i].domain !== idOrDomain) {
+                updatedSources.push(root.sourcesList[i]);
+            }
+        }
+        root.sourcesList = updatedSources;
+
+        var updatedArticles = [];
+        for (var j = 0; j < root.articlesList.length; j++) {
+            if (root.articlesList[j].source_id !== idOrDomain && root.articlesList[j].source_name !== idOrDomain) {
+                updatedArticles.push(root.articlesList[j]);
+            }
+        }
+        root.articlesList = updatedArticles;
+
+        if (headlineList.activeSourceId === idOrDomain) {
+            headlineList.activeSourceId = "";
+        }
+
+        if (root.selectedArticle && (root.selectedArticle.source_id === idOrDomain || root.selectedArticle.source_name === idOrDomain)) {
+            root.selectedArticle = null;
+            root.fullCleanArticle = null;
+            root.aiSummaryData = null;
+            root.isLoadingContent = false;
+        }
+
+        // 2. Call backend removal process
+        removeSourceProc.command = [root.engineBin, "remove-source", "--", idOrDomain];
+        removeSourceProc.running = true;
     }
 
     // Keyboard navigation and shortcuts
@@ -289,6 +325,9 @@ Rectangle {
             }
             onRefreshRequested: {
                 root.syncFeeds();
+            }
+            onRemoveSourceRequested: function(sourceId, sourceName) {
+                root.removeSource(sourceId);
             }
         }
 
@@ -498,15 +537,15 @@ Rectangle {
             try {
                 if (root.promptBuffer.trim().length > 0) {
                     var added = JSON.parse(root.promptBuffer);
-                    root.promptStatus = "Basariyla " + added.length + " yeni kaynak eklendi!";
+                    root.promptStatus = (I18n.currentLanguage === "en") ? ("Successfully added " + added.length + " new sources!") : ("Basariyla " + added.length + " yeni kaynak eklendi!");
                     root.loadSources();
                     root.syncFeeds();
                 } else {
-                    root.promptStatus = "Kaynaklar kontrol edildi.";
+                    root.promptStatus = I18n.t("modal_controlled");
                     root.loadSources();
                 }
             } catch(e) {
-                root.promptStatus = "Kaynaklar eklendi.";
+                root.promptStatus = (I18n.currentLanguage === "en") ? "Sources updated." : "Kaynaklar eklendi.";
                 root.loadSources();
             }
             root.promptBuffer = "";
@@ -519,5 +558,13 @@ Rectangle {
 
     Process {
         id: toggleReadProc
+    }
+
+    Process {
+        id: removeSourceProc
+        onExited: function(exitCode) {
+            root.loadSources();
+            root.loadArticles();
+        }
     }
 }

@@ -47,6 +47,13 @@ Rectangle {
         return false;
     }
 
+    function statusLabel(st) {
+        if (st === "Tümü") return I18n.t("tab_all");
+        if (st === "Okunmamış") return I18n.t("tab_unread");
+        if (st === "Kaydedilenler") return I18n.t("tab_saved");
+        return st;
+    }
+
     function norm(s) {
         if (!s) return "";
         return String(s).toLowerCase()
@@ -66,7 +73,7 @@ Rectangle {
 
         for (var i = 0; i < sourceList.length; i++) {
             var a = sourceList[i];
-            if (root.activeCategory !== "Tümü") {
+            if (!root.activeSourceId && root.activeCategory !== "Tümü") {
                 var c = norm(root.activeCategory);
                 var aCat = norm(a.category || "");
                 var matchCat = false;
@@ -75,13 +82,13 @@ Rectangle {
                 } else if (c === "siyaset") {
                     matchCat = aCat.indexOf("siyaset") !== -1 || aCat.indexOf("politika") !== -1 || aCat.indexOf("meclis") !== -1;
                 } else if (c === "yerel") {
-                    matchCat = aCat.indexOf("yerel") !== -1 || aCat.indexOf("sehir") !== -1 || aCat.indexOf("belediye") !== -1;
+                    matchCat = aCat.indexOf("yerel") !== -1 || aCat.indexOf("sehir") !== -1 || aCat.indexOf("belediye") !== -1 || (a.source_name && norm(a.source_name).indexOf("asir") !== -1) || (a.source_name && norm(a.source_name).indexOf("bursa") !== -1);
                 } else if (c === "linux") {
                     matchCat = aCat.indexOf("linux") !== -1 || (a.source_name && norm(a.source_name).indexOf("phoronix") !== -1);
                 } else if (c === "teknoloji") {
                     matchCat = aCat.indexOf("teknoloji") !== -1 || aCat.indexOf("bilisim") !== -1 || aCat.indexOf("dijital") !== -1;
                 } else if (c === "donanim") {
-                    matchCat = aCat.indexOf("donan") !== -1 || (a.source_name && norm(a.source_name).indexOf("hwp") !== -1);
+                    matchCat = aCat.indexOf("donan") !== -1 || (a.source_name && norm(a.source_name).indexOf("arsiv") !== -1) || (a.source_name && norm(a.source_name).indexOf("hwp") !== -1);
                 } else if (c === "bilim") {
                     matchCat = aCat.indexOf("bilim") !== -1 || (a.source_name && norm(a.source_name).indexOf("evrim") !== -1);
                 } else if (c === "girisimcilik" || c === "girisim") {
@@ -209,7 +216,7 @@ Rectangle {
 
                     Text {
                         anchors.fill: parent
-                        text: "Haberlerde ara..."
+                        text: I18n.t("search_placeholder")
                         font.family: Theme.fontFamily
                         font.pixelSize: 12
                         color: Theme.textDim
@@ -252,7 +259,7 @@ Rectangle {
 
                     Text {
                         anchors.centerIn: parent
-                        text: (modelData === "Okunmamış" && root.unreadCount > 0) ? (modelData + " (" + root.unreadCount + ")") : modelData
+                        text: (modelData === "Okunmamış" && root.unreadCount > 0) ? (root.statusLabel(modelData) + " (" + root.unreadCount + ")") : root.statusLabel(modelData)
                         font.family: Theme.fontFamily
                         font.pixelSize: 10
                         font.bold: root.statusFilter === modelData
@@ -320,7 +327,7 @@ Rectangle {
             Layout.fillWidth: true
 
             Text {
-                text: "HABER AKISI (" + articleListView.count + ")"
+                text: I18n.t("headlines") + " (" + articleListView.count + ")"
                 font.family: Theme.fontFamily
                 font.pixelSize: 10
                 font.bold: true
@@ -425,7 +432,7 @@ Rectangle {
                             }
 
                             Text {
-                                text: modelData.reading_time_mins + " dk okuma"
+                                text: modelData.reading_time_mins + " " + I18n.t("min_read")
                                 font.family: Theme.fontFamily
                                 font.pixelSize: 10
                                 color: Theme.textDim

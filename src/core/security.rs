@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use url::Url;
 
-pub const MAX_HTTP_PAYLOAD_SIZE: usize = 2 * 1024 * 1024; // 2 MiB ceiling
+pub const MAX_HTTP_PAYLOAD_SIZE: usize = 8 * 1024 * 1024; // 8 MiB ceiling
 pub const MAX_LOCAL_FILE_SIZE: usize = 10 * 1024 * 1024; // 10 MiB ceiling
 
 #[derive(Debug)]
@@ -290,9 +290,22 @@ pub async fn fetch_bounded_content(
     let (validated_url, resolved_addrs) = validate_url_ssrf_and_resolve(url_str)?;
     let host_str = validated_url.host_str().unwrap_or("").to_string();
 
+    let mut default_headers = reqwest::header::HeaderMap::new();
+    default_headers.insert(
+        reqwest::header::ACCEPT,
+        reqwest::header::HeaderValue::from_static(
+            "text/html,application/xhtml+xml,application/xml,application/rss+xml,application/atom+xml;q=0.9,*/*;q=0.8",
+        ),
+    );
+    default_headers.insert(
+        reqwest::header::ACCEPT_LANGUAGE,
+        reqwest::header::HeaderValue::from_static("tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"),
+    );
+
     let mut client_builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
         .connect_timeout(Duration::from_secs(5))
+        .default_headers(default_headers)
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
             if attempt.previous().len() >= 5 {
                 attempt.error("Cok fazla yonlendirme (yonlendirme dongusu)")
@@ -308,12 +321,19 @@ pub async fn fetch_bounded_content(
         .gzip(true)
         .brotli(true)
         .deflate(true)
-        .user_agent("QuickNews/0.1 (Omarchy Linux; Text-First News Reader; +https://github.com/omarchy/quicknews)");
+        .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
 
-    // Pin resolved verified public IP address to prevent DNS Rebinding (TOCTOU attacks)
-    if let Some(first_socket) = resolved_addrs.first() {
-        client_builder = client_builder.resolve(&host_str, *first_socket);
-    }
+    // Pin resolved verified public IP addresses to prevent DNS Rebinding (TOCTOU attacks)
+    // Filter to IPv4 addresses if available to prevent unreachable IPv6 route failures
+    let preferred_addrs: Vec<std::net::SocketAddr> = {
+        let v4: Vec<_> = resolved_addrs.iter().filter(|a| a.is_ipv4()).copied().collect();
+        if !v4.is_empty() {
+            v4
+        } else {
+            resolved_addrs
+        }
+    };
+    client_builder = client_builder.resolve_to_addrs(&host_str, &preferred_addrs);
 
     let client = client_builder
         .build()

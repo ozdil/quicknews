@@ -16,6 +16,7 @@ Rectangle {
     signal sourceSelected(string sourceId)
     signal openAddModal()
     signal refreshRequested()
+    signal removeSourceRequested(string sourceId, string sourceName)
 
     color: Theme.bgDark
     border.color: Theme.border
@@ -46,7 +47,7 @@ Rectangle {
             return sCat.indexOf("siyaset") !== -1 || sCat.indexOf("politika") !== -1 || sCat.indexOf("meclis") !== -1;
         }
         if (c === "yerel") {
-            return sCat.indexOf("yerel") !== -1 || sCat.indexOf("sehir") !== -1 || sCat.indexOf("belediye") !== -1;
+            return sCat.indexOf("yerel") !== -1 || sCat.indexOf("sehir") !== -1 || sCat.indexOf("belediye") !== -1 || sName.indexOf("asir") !== -1 || sName.indexOf("bursa") !== -1;
         }
         if (c === "linux") {
             return sCat.indexOf("linux") !== -1 || sName.indexOf("linux") !== -1 || sDomain.indexOf("phoronix") !== -1;
@@ -55,7 +56,7 @@ Rectangle {
             return sCat.indexOf("teknoloji") !== -1 || sCat.indexOf("bilisim") !== -1 || sCat.indexOf("dijital") !== -1;
         }
         if (c === "donanim") {
-            return sCat.indexOf("donan") !== -1 || sName.indexOf("donan") !== -1 || sDomain.indexOf("hwp") !== -1;
+            return sCat.indexOf("donan") !== -1 || sName.indexOf("donan") !== -1 || sName.indexOf("arsiv") !== -1 || sDomain.indexOf("hwp") !== -1;
         }
         if (c === "bilim") {
             return sCat.indexOf("bilim") !== -1 || sName.indexOf("evrim") !== -1;
@@ -77,6 +78,23 @@ Rectangle {
             }
         }
         return res;
+    }
+
+    function categoryLabel(cat) {
+        if (!cat) return "";
+        var keyMap = {
+            "Tümü": "cat_all",
+            "Gündem": "cat_agenda",
+            "Siyaset": "cat_politics",
+            "Yerel": "cat_local",
+            "Teknoloji": "cat_tech",
+            "Linux": "cat_linux",
+            "Donanım": "cat_hardware",
+            "Bilim": "cat_science",
+            "Girişimcilik": "cat_startups"
+        };
+        var k = keyMap[cat];
+        return k ? I18n.t(k) : cat;
     }
 
     ColumnLayout {
@@ -159,7 +177,7 @@ Rectangle {
                 }
 
                 Text {
-                    text: "AI ile Kaynak Ekle"
+                    text: I18n.t("ai_add_source")
                     font.family: Theme.fontFamily
                     font.pixelSize: 12
                     font.bold: true
@@ -178,7 +196,7 @@ Rectangle {
 
         // Categories Title
         Text {
-            text: "KATEGORILER"
+            text: I18n.t("categories")
             font.family: Theme.fontFamily
             font.pixelSize: 10
             font.bold: true
@@ -203,7 +221,7 @@ Rectangle {
                     Text {
                         id: catText
                         anchors.centerIn: parent
-                        text: modelData
+                        text: root.categoryLabel(modelData)
                         font.family: Theme.fontFamily
                         font.pixelSize: 11
                         color: root.activeCategory === modelData ? Theme.bgDark : Theme.textMain
@@ -231,7 +249,7 @@ Rectangle {
             Layout.topMargin: 8
 
             Text {
-                text: "KAYNAKLAR (" + root.getFilteredSources().length + ")"
+                text: I18n.t("sources") + " (" + root.getFilteredSources().length + ")"
                 font.family: Theme.fontFamily
                 font.pixelSize: 10
                 font.bold: true
@@ -241,7 +259,7 @@ Rectangle {
 
             Text {
                 visible: root.unreadCount > 0
-                text: root.unreadCount + " yeni"
+                text: root.unreadCount + " " + I18n.t("new_count")
                 font.family: Theme.fontFamily
                 font.pixelSize: 10
                 font.bold: true
@@ -262,16 +280,33 @@ Rectangle {
                 spacing: 4
 
                 delegate: Rectangle {
+                    id: srcItemRect
                     required property var modelData
                     width: sourceListView.width
                     height: 32
                     radius: Theme.radiusSm
-                    color: root.selectedSourceId === modelData.id ? Theme.bgCard : (srcMouse.containsMouse ? Theme.bgCardHover : "transparent")
+                    color: root.selectedSourceId === modelData.id ? Theme.bgCard : (srcMouse.containsMouse || delBtnMouse.containsMouse ? Theme.bgCardHover : "transparent")
+
+                    MouseArea {
+                        id: srcMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (root.selectedSourceId === modelData.id) {
+                                root.selectedSourceId = "";
+                                root.sourceSelected("");
+                            } else {
+                                root.selectedSourceId = modelData.id;
+                                root.sourceSelected(modelData.id);
+                            }
+                        }
+                    }
 
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 8
-                        anchors.rightMargin: 8
+                        anchors.rightMargin: 6
                         spacing: 8
 
                         Text {
@@ -291,25 +326,40 @@ Rectangle {
                         }
 
                         Text {
+                            visible: !srcMouse.containsMouse && !delBtnMouse.containsMouse
                             text: modelData.category
                             font.family: Theme.fontFamily
                             font.pixelSize: 9
                             color: Theme.textDim
                         }
-                    }
 
-                    MouseArea {
-                        id: srcMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (root.selectedSourceId === modelData.id) {
-                                root.selectedSourceId = "";
-                                root.sourceSelected("");
-                            } else {
-                                root.selectedSourceId = modelData.id;
-                                root.sourceSelected(modelData.id);
+                        // Remove source button (visible when row is hovered)
+                        Rectangle {
+                            id: delBtn
+                            visible: srcMouse.containsMouse || delBtnMouse.containsMouse
+                            width: 22
+                            height: 22
+                            radius: 4
+                            color: delBtnMouse.containsMouse ? Theme.accentRed : Theme.bgSurface
+                            border.color: delBtnMouse.containsMouse ? Theme.accentRed : Theme.border
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: Theme.iconTrash
+                                font.family: Theme.iconFont
+                                font.pixelSize: 11
+                                color: delBtnMouse.containsMouse ? Theme.bgDark : Theme.accentRed
+                            }
+
+                            MouseArea {
+                                id: delBtnMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.removeSourceRequested(modelData.id, modelData.name);
+                                }
                             }
                         }
                     }
@@ -320,7 +370,7 @@ Rectangle {
         // Bottom Footer info
         Text {
             Layout.fillWidth: true
-            text: "Omarchy Linux • Resimsiz ve Guvenli"
+            text: I18n.t("footer_tagline")
             font.family: Theme.fontFamily
             font.pixelSize: 9
             color: Theme.textDim

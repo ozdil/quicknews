@@ -79,29 +79,64 @@ impl FeedParser {
         let candidates = [
             "feed",
             "rss",
+            "feed/",
+            "rss/",
+            "rss/news",
             "rss.xml",
             "feed.xml",
             "atom.xml",
             "index.xml",
-            "feed/",
-            "rss/",
+            "feeds",
         ];
 
         for path in &candidates {
             if let Ok(target) = base_url.join(path) {
-                if let Ok(content) = fetch_bounded_content(target.as_str(), 64 * 1024, 4).await {
+                if let Ok(content) = fetch_bounded_content(target.as_str(), 64 * 1024, 5).await {
                     let trimmed = content.trim();
-                    if trimmed.starts_with("<?xml") || trimmed.contains("<rss") || trimmed.contains("<feed") {
-                        return Ok(target.to_string());
+                    let lower = trimmed.to_lowercase();
+                    if !lower.starts_with("<!doctype html")
+                        && (trimmed.starts_with("<?xml") || trimmed.contains("<rss") || trimmed.contains("<feed"))
+                    {
+                        if let Ok(items) = Self::parse_xml(trimmed, "probe", "Probe", "Genel") {
+                            if !items.is_empty() {
+                                return Ok(target.to_string());
+                            }
+                        }
                     }
                 }
             }
         }
 
         Err(SecurityError::Network(format!(
-            "{} adresi icin gecerli bir RSS/Atom akisi bulunamadi",
+            "{} adresi icin gecerli bir RSS/Atom XML akisi bulunamadi",
             base_url
         )))
+    }
+
+    /// Verifies that a feed URL returns a functional, up-to-date RSS/Atom XML feed with parsed items.
+    /// Rejects dead links, 404 HTML pages, and feeds that have no valid articles.
+    pub async fn verify_feed_endpoint(feed_url: &str) -> Result<usize, SecurityError> {
+        let content = fetch_bounded_content(feed_url, 1024 * 1024, 10).await?;
+        let trimmed = content.trim();
+
+        // Reject plain HTML documents early (e.g. 404 pages or websites without RSS)
+        let lower = trimmed.to_lowercase();
+        if lower.starts_with("<!doctype html")
+            || (lower.contains("<html") && !lower.contains("<rss") && !lower.contains("<feed"))
+        {
+            return Err(SecurityError::Network(
+                "Hedef adres guncel bir RSS/Atom XML beslemesi degil, HTML web sayfasi donduruyor".to_string(),
+            ));
+        }
+
+        let items = Self::parse_xml(trimmed, "probe_id", "Probe Source", "Genel")?;
+        if items.is_empty() {
+            return Err(SecurityError::Network(
+                "Akista gecerli haber veya oge bulunamadi (bos veya desteklenmeyen XML akisi)".to_string(),
+            ));
+        }
+
+        Ok(items.len())
     }
 
     /// Fetches and parses feed items from an RSS/Atom endpoint.
@@ -111,7 +146,7 @@ impl FeedParser {
         source_name: &str,
         category: &str,
     ) -> Result<Vec<FeedItem>, SecurityError> {
-        let xml_text = fetch_bounded_content(feed_url, MAX_HTTP_PAYLOAD_SIZE, 8).await?;
+        let xml_text = fetch_bounded_content(feed_url, MAX_HTTP_PAYLOAD_SIZE, 15).await?;
         Self::parse_xml(&xml_text, source_id, source_name, category)
     }
 
@@ -157,12 +192,33 @@ impl FeedParser {
                         cur_date.clear();
                     } else if in_item || in_entry {
                         current_tag = name_lower.clone();
-                        // Atom link with href attribute
+                        // Atom link with href attribute in Event::Start
                         if (name_lower == "link") && (in_item || in_entry) {
                             for attr in e.attributes().flatten() {
                                 let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
                                 if key.eq_ignore_ascii_case("href") {
-                                    cur_link = String::from_utf8_lossy(&attr.value).to_string();
+                                    let val = String::from_utf8_lossy(&attr.value).to_string();
+                                    if !val.trim().is_empty() {
+                                        cur_link = val.trim().to_string();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(Event::Empty(ref e)) => {
+                    if in_item || in_entry {
+                        let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                        let name_lower = name.to_lowercase();
+                        // Atom self-closing link: <link rel="alternate" href="..." />
+                        if name_lower == "link" {
+                            for attr in e.attributes().flatten() {
+                                let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                                if key.eq_ignore_ascii_case("href") {
+                                    let val = String::from_utf8_lossy(&attr.value).to_string();
+                                    if !val.trim().is_empty() {
+                                        cur_link = val.trim().to_string();
+                                    }
                                 }
                             }
                         }

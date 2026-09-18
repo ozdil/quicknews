@@ -127,7 +127,7 @@ impl ArticleExtractor {
     }
 
     fn extract_body_text(document: &Html) -> String {
-        // Best candidates for article containers
+        // Best candidates for article containers (ordered by specificity)
         let candidate_selectors = [
             "[itemprop='articleBody']",
             ".entry-content",
@@ -137,17 +137,34 @@ impl ArticleExtractor {
             ".story-body",
             ".news-content",
             ".detail-text",
-            ".content-body",
+            ".content.ql-style",
+            "#content.ql-style",
+            "[data-content-id]",
             "article:not(.inloop):not(.related)",
             "article",
             "main",
+            ".content-body",
         ];
 
         let mut article_element = None;
+        let mut best_text_len: usize = 0;
+
         for sel_str in &candidate_selectors {
             if let Ok(sel) = Selector::parse(sel_str) {
-                if let Some(el) = document.select(&sel).next() {
-                    article_element = Some(el);
+                for el in document.select(&sel) {
+                    let mut test_blocks = Vec::new();
+                    Self::collect_clean_blocks(&el, &mut test_blocks, 0);
+                    let total_len: usize = test_blocks.iter().map(|b| b.len()).sum();
+                    if total_len > best_text_len && total_len >= 120 {
+                        best_text_len = total_len;
+                        article_element = Some(el);
+                        // If we have found a rich article body (>= 600 chars), prioritize it
+                        if total_len >= 600 {
+                            break;
+                        }
+                    }
+                }
+                if best_text_len >= 600 {
                     break;
                 }
             }

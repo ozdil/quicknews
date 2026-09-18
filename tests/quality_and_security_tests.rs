@@ -499,12 +499,14 @@ fn test_ai_political_and_local_sources_discovery() {
     assert!(pol_sources.iter().any(|s| s.name == "Sozcu"));
     assert!(pol_sources.iter().any(|s| s.name == "Haberturk"));
     assert!(pol_sources.iter().any(|s| s.name == "BBC Turkce"));
+    assert!(pol_sources.iter().any(|s| s.name == "Diken"));
     assert!(pol_sources.iter().any(|s| s.category == "Siyaset" || s.category == "Gundem"));
 
     // Local news discovery
     let local_sources = AiEngine::resolve_curated_knowledge_base("istanbul ve ankara yerel haber siteleri");
-    assert!(local_sources.iter().any(|s| s.name == "Istanbul Bulteni"));
-    assert!(local_sources.iter().any(|s| s.name == "Baskent Gazetesi"));
+    assert!(local_sources.iter().any(|s| s.name == "Haberler Yerel"));
+    assert!(local_sources.iter().any(|s| s.name == "Yeni Asir"));
+    assert!(local_sources.iter().any(|s| s.name == "Bursa Hakimiyet"));
     assert!(local_sources.iter().all(|s| s.category == "Yerel"));
 
     // Tag auto classification for politics and local
@@ -565,6 +567,74 @@ fn test_toggle_article_read_and_set_read_state() {
     let mut clean_articles = storage.load_articles();
     clean_articles.retain(|a| a.id != test_item.id);
     let _ = storage.save_articles(&clean_articles);
+}
+
+#[tokio::test]
+async fn test_evrim_agaci_extraction() {
+    let mock_html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Project RattleCam ile Canlı Doğum Anları - Evrim Ağacı</title>
+        </head>
+        <body>
+            <div class="content-body">30 gün 90 gün 1 yıl</div>
+            <div class="content ql-style" id="content">
+                <p>Project RattleCam ekibi, çıngıraklı yılanların vahşi doğada doğum anlarını yüksek çözünürlüklü kameralarla kaydetti.</p>
+                <p>Bu araştırma biyologlar için kritik veriler sunuyor ve sürüngenlerin üreme davranışlarını detaylandırıyor.</p>
+            </div>
+        </body>
+        </html>
+    "#;
+
+    let clean = ArticleExtractor::extract(mock_html, "https://evrimagaci.org/mock-article");
+    assert!(clean.content_text.contains("Project RattleCam ekibi"));
+    assert!(clean.content_text.contains("sürüngenlerin üreme davranışlarını"));
+    assert!(!clean.content_text.contains("30 gün 90 gün 1 yıl"));
+
+    // Network test if available
+    let url = "https://evrimagaci.org/project-rattlecam-ile-uc-eyalette-cingirakli-yilanlarin-canli-dogum-anlari-ilk-kez-goruntulendi-23801";
+    if let Ok(resp) = reqwest::get(url).await {
+        if let Ok(html) = resp.text().await {
+            let extracted = ArticleExtractor::extract(&html, url);
+            assert!(!extracted.content_text.is_empty());
+            assert!(extracted.word_count > 100);
+            assert!(extracted.content_text.contains("RattleCam") || extracted.content_text.contains("çıngıraklı yılan"));
+        }
+    }
+}
+
+#[test]
+fn test_atom_feed_parsing_with_empty_link_tags() {
+    let atom_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <title>Atom Feed Test</title>
+      <entry>
+        <title>NTV ve The Verge Tipi Atom Makalesi</title>
+        <link rel="alternate" type="text/html" href="https://example.com/haber-123" />
+        <summary>Örnek Atom içerik özeti burada yer alıyor.</summary>
+        <published>2026-09-18T10:00:00Z</published>
+      </entry>
+    </feed>"#;
+
+    let items = FeedParser::parse_xml(atom_xml, "src_atom", "Atom Source", "Gundem").unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].title, "NTV ve The Verge Tipi Atom Makalesi");
+    assert_eq!(items[0].link, "https://example.com/haber-123");
+    assert_eq!(items[0].summary, "Örnek Atom içerik özeti burada yer alıyor.");
+}
+
+#[tokio::test]
+async fn test_verify_feed_endpoint_rejects_html_and_dead_feeds() {
+    // 1. HTML redirection / 404 page rejection
+    let fake_html = "<!DOCTYPE html><html><head><title>404 Not Found</title></head><body>Sayfa bulunamadi</body></html>";
+    let parse_res = FeedParser::parse_xml(fake_html, "probe", "Probe", "Genel");
+    assert!(parse_res.is_err() || parse_res.unwrap().is_empty());
+
+    // 2. Empty RSS feed with zero items rejection
+    let empty_rss = r#"<?xml version="1.0"?><rss version="2.0"><channel><title>Bos Akis</title></channel></rss>"#;
+    let empty_items = FeedParser::parse_xml(empty_rss, "probe", "Probe", "Genel").unwrap();
+    assert!(empty_items.is_empty());
 }
 
 
