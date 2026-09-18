@@ -19,17 +19,34 @@ pub struct AiSummaryResult {
 pub struct AiEngine;
 
 impl AiEngine {
+    /// Retrieves Gemini API key from environment variable or ~/.config/quicknews/gemini_api_key
+    pub fn get_gemini_api_key() -> Option<String> {
+        if let Ok(key) = std::env::var("GEMINI_API_KEY") {
+            if !key.trim().is_empty() {
+                return Some(key.trim().to_string());
+            }
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            let key_file = std::path::PathBuf::from(home).join(".config").join("quicknews").join("gemini_api_key");
+            if let Ok(content) = std::fs::read_to_string(key_file) {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+        None
+    }
+
     /// Discovers news sources from natural language prompt (e.g. "Turkiye teknoloji sitelerinden 10 tanesini ekle")
     pub async fn discover_sources_from_prompt(prompt: &str) -> Vec<DiscoveredSource> {
         let p_lower = prompt.to_lowercase();
 
-        // 1. Try Google Gemini API if GEMINI_API_KEY is present
-        if let Ok(api_key) = std::env::var("GEMINI_API_KEY") {
-            if !api_key.trim().is_empty() {
-                if let Ok(res) = Self::query_gemini_for_sources(prompt, &api_key).await {
-                    if !res.is_empty() {
-                        return res;
-                    }
+        // 1. Try Google Gemini API if GEMINI_API_KEY is configured
+        if let Some(api_key) = Self::get_gemini_api_key() {
+            if let Ok(res) = Self::query_gemini_for_sources(prompt, &api_key).await {
+                if !res.is_empty() {
+                    return res;
                 }
             }
         }
@@ -54,12 +71,10 @@ impl AiEngine {
     /// - Zero unicode emojis
     pub async fn clean_full_article_content(title: &str, raw_text: &str) -> String {
         // 1. Try Gemini if GEMINI_API_KEY is configured
-        if let Ok(api_key) = std::env::var("GEMINI_API_KEY") {
-            if !api_key.trim().is_empty() {
-                if let Ok(cleaned) = Self::query_gemini_full_article(title, raw_text, &api_key).await {
-                    if cleaned.trim().len() > 100 {
-                        return cleaned;
-                    }
+        if let Some(api_key) = Self::get_gemini_api_key() {
+            if let Ok(cleaned) = Self::query_gemini_full_article(title, raw_text, &api_key).await {
+                if cleaned.trim().len() > 100 {
+                    return cleaned;
                 }
             }
         }
@@ -605,11 +620,9 @@ impl AiEngine {
         content_text: &str,
     ) -> AiSummaryResult {
         // Try Gemini if available
-        if let Ok(api_key) = std::env::var("GEMINI_API_KEY") {
-            if !api_key.trim().is_empty() {
-                if let Ok(res) = Self::query_gemini_summary(title, content_text, &api_key).await {
-                    return res;
-                }
+        if let Some(api_key) = Self::get_gemini_api_key() {
+            if let Ok(res) = Self::query_gemini_summary(title, content_text, &api_key).await {
+                return res;
             }
         }
 
@@ -699,254 +712,86 @@ impl AiEngine {
     }
 
     pub fn resolve_curated_knowledge_base(query: &str) -> Vec<DiscoveredSource> {
-        let mut results = Vec::new();
-        let q = query.to_lowercase();
+        let q_raw = query.trim().to_lowercase();
+        let q_norm = normalize_turkish_chars(&q_raw);
 
-        let is_tr = q.contains("turkiye") || q.contains("türkiye") || q.contains("turk") || q.contains("türk");
-        let is_tech = q.contains("teknoloji") || q.contains("yazilim") || q.contains("yazılım") || q.contains("bilisim") || q.contains("tech");
-        let is_linux = q.contains("linux") || q.contains("acik kaynak") || q.contains("açık kaynak") || q.contains("open source");
-        let is_science = q.contains("bilim") || q.contains("uzay") || q.contains("science");
-        let is_finance = q.contains("ekonomi") || q.contains("finans") || q.contains("borsa") || q.contains("dolar");
-        let is_politics = q.contains("siyas") || q.contains("politika") || q.contains("meclis") || q.contains("hukumet") || q.contains("hükümet") || q.contains("parti") || q.contains("secim") || q.contains("seçim");
-        let is_local = q.contains("yerel") || q.contains("ankara") || q.contains("istanbul") || q.contains("izmir") || q.contains("bursa") || q.contains("antalya") || q.contains("sehir") || q.contains("şehir") || q.contains("belediye");
-        let is_general = q.contains("gundem") || q.contains("gündem") || q.contains("genel") || q.contains("haber") || q.contains("manset") || q.contains("manşet") || q.contains("gazete") || q.contains("ajans") || q.contains("son dakika");
+        // 1. Direct domain detection in prompt (e.g. "kotaku.com", "add arstechnica.com", "https://...")
+        let mut direct_sources = Vec::new();
+        for word in q_raw.split_whitespace() {
+            let clean_word = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '.' && c != '/' && c != ':');
+            if let Ok(parsed_url) = url::Url::parse(clean_word) {
+                if let Some(host) = parsed_url.host_str() {
+                    let h = host.trim_start_matches("www.").to_string();
+                    if h.contains('.') {
+                        direct_sources.push(DiscoveredSource {
+                            name: domain_to_display_name(&h),
+                            domain: h,
+                            suggested_feed: Some(parsed_url.to_string()),
+                            category: "Teknoloji".to_string(),
+                        });
+                    }
+                }
+            } else if clean_word.contains('.') && !clean_word.starts_with('.') && !clean_word.ends_with('.') {
+                let parts: Vec<&str> = clean_word.split('.').collect();
+                if parts.len() >= 2 && parts.last().map(|tld| tld.len() >= 2 && tld.chars().all(|c| c.is_alphabetic())).unwrap_or(false) {
+                    let host = clean_word.trim_start_matches("www.").to_string();
+                    direct_sources.push(DiscoveredSource {
+                        name: domain_to_display_name(&host),
+                        domain: host.clone(),
+                        suggested_feed: Some(format!("https://{}/feed", host)),
+                        category: "Teknoloji".to_string(),
+                    });
+                }
+            }
+        }
 
-        if is_local {
-            results.push(DiscoveredSource {
-                name: "Haberler Yerel".to_string(),
-                domain: "haberler.com".to_string(),
-                suggested_feed: Some("https://rss.haberler.com/rss.asp?kategori=yerel".to_string()),
-                category: "Yerel".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Yeni Asir".to_string(),
-                domain: "yeniasir.com.tr".to_string(),
-                suggested_feed: Some("https://www.yeniasir.com.tr/rss/anasayfa.xml".to_string()),
-                category: "Yerel".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Bursa Hakimiyet".to_string(),
-                domain: "bursahakimiyet.com.tr".to_string(),
-                suggested_feed: Some("https://www.bursahakimiyet.com.tr/rss".to_string()),
-                category: "Yerel".to_string(),
-            });
-        } else if is_politics || is_general {
-            results.push(DiscoveredSource {
-                name: "Sozcu".to_string(),
-                domain: "sozcu.com.tr".to_string(),
-                suggested_feed: Some("https://www.sozcu.com.tr/feeds-son-dakika".to_string()),
-                category: "Gundem".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Haberturk".to_string(),
-                domain: "haberturk.com".to_string(),
-                suggested_feed: Some("https://www.haberturk.com/rss".to_string()),
-                category: "Gundem".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "NTV Gundem".to_string(),
-                domain: "ntv.com.tr".to_string(),
-                suggested_feed: Some("https://www.ntv.com.tr/gundem.rss".to_string()),
-                category: "Gundem".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "BBC Turkce".to_string(),
-                domain: "bbc.com".to_string(),
-                suggested_feed: Some("https://feeds.bbci.co.uk/turkce/rss.xml".to_string()),
-                category: "Siyaset".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Diken".to_string(),
-                domain: "diken.com.tr".to_string(),
-                suggested_feed: Some("https://www.diken.com.tr/feed/".to_string()),
-                category: "Siyaset".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Gazete Duvar".to_string(),
-                domain: "gazeteduvar.com.tr".to_string(),
-                suggested_feed: Some("https://www.gazeteduvar.com.tr/export/rss".to_string()),
-                category: "Siyaset".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Anadolu Ajansi".to_string(),
-                domain: "aa.com.tr".to_string(),
-                suggested_feed: Some("https://www.aa.com.tr/tr/rss/default?cat=guncel".to_string()),
-                category: "Gundem".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Cumhuriyet".to_string(),
-                domain: "cumhuriyet.com.tr".to_string(),
-                suggested_feed: Some("https://www.cumhuriyet.com.tr/rss".to_string()),
-                category: "Siyaset".to_string(),
-            });
-        } else if is_tr && is_tech {
-            results.push(DiscoveredSource {
-                name: "Webrazzi".to_string(),
-                domain: "webrazzi.com".to_string(),
-                suggested_feed: Some("https://webrazzi.com/feed/".to_string()),
-                category: "Teknoloji".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "ShiftDelete".to_string(),
-                domain: "shiftdelete.net".to_string(),
-                suggested_feed: Some("https://shiftdelete.net/feed".to_string()),
-                category: "Teknoloji".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "DonanimHaber".to_string(),
-                domain: "donanimhaber.com".to_string(),
-                suggested_feed: Some("https://www.donanimhaber.com/rss/tum/".to_string()),
-                category: "Teknoloji".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Webtekno".to_string(),
-                domain: "webtekno.com".to_string(),
-                suggested_feed: Some("https://www.webtekno.com/rss.xml".to_string()),
-                category: "Teknoloji".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "LOG".to_string(),
-                domain: "log.com.tr".to_string(),
-                suggested_feed: Some("https://www.log.com.tr/feed/".to_string()),
-                category: "Teknoloji".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Teknoblog".to_string(),
-                domain: "teknoblog.com".to_string(),
-                suggested_feed: Some("https://www.teknoblog.com/feed/".to_string()),
-                category: "Teknoloji".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Hardware Plus".to_string(),
-                domain: "hwp.com.tr".to_string(),
-                suggested_feed: Some("https://hwp.com.tr/feed".to_string()),
-                category: "Donanim".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "CHIP Turkiye".to_string(),
-                domain: "chip.com.tr".to_string(),
-                suggested_feed: Some("https://www.chip.com.tr/rss".to_string()),
-                category: "Teknoloji".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Swipeline".to_string(),
-                domain: "swipeline.co".to_string(),
-                suggested_feed: Some("https://swipeline.co/feed/".to_string()),
-                category: "Girisimcilik".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Egirisim".to_string(),
-                domain: "egirisim.com".to_string(),
-                suggested_feed: Some("https://egirisim.com/feed/".to_string()),
-                category: "Girisimcilik".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Donanim Arsivi".to_string(),
-                domain: "donanimarsivi.com".to_string(),
-                suggested_feed: Some("https://donanimarsivi.com/feed/".to_string()),
-                category: "Donanim".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Donanim Gunlugu".to_string(),
-                domain: "donanimgunlugu.com".to_string(),
-                suggested_feed: Some("https://donanimgunlugu.com/feed".to_string()),
-                category: "Donanim".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "BTK Haber".to_string(),
-                domain: "btk.gov.tr".to_string(),
-                suggested_feed: Some("https://www.btk.gov.tr/rss/news".to_string()),
-                category: "Bilisim".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Pazarlamasyon".to_string(),
-                domain: "pazarlamasyon.com".to_string(),
-                suggested_feed: Some("https://pazarlamasyon.com/feed/".to_string()),
-                category: "Dijital".to_string(),
-            });
-        } else if is_linux {
-            results.push(DiscoveredSource {
-                name: "Phoronix".to_string(),
-                domain: "phoronix.com".to_string(),
-                suggested_feed: Some("https://www.phoronix.com/rss.php".to_string()),
-                category: "Linux".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Arch Linux News".to_string(),
-                domain: "archlinux.org".to_string(),
-                suggested_feed: Some("https://archlinux.org/feeds/news/".to_string()),
-                category: "Linux".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "It's FOSS".to_string(),
-                domain: "itsfoss.com".to_string(),
-                suggested_feed: Some("https://itsfoss.com/feed/".to_string()),
-                category: "Acik Kaynak".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "OMG! Ubuntu".to_string(),
-                domain: "omgubuntu.co.uk".to_string(),
-                suggested_feed: Some("https://www.omgubuntu.co.uk/feed".to_string()),
-                category: "Linux".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "LWN.net".to_string(),
-                domain: "lwn.net".to_string(),
-                suggested_feed: Some("https://lwn.net/headlines/rss".to_string()),
-                category: "Cekirdek".to_string(),
-            });
-        } else if is_science {
-            results.push(DiscoveredSource {
-                name: "Evrim Agaci".to_string(),
-                domain: "evrimagaci.org".to_string(),
-                suggested_feed: Some("https://evrimagaci.org/rss.xml".to_string()),
-                category: "Bilim".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Phys.org".to_string(),
-                domain: "phys.org".to_string(),
-                suggested_feed: Some("https://phys.org/rss-feed/".to_string()),
-                category: "Fizik & Bilim".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "ScienceDaily".to_string(),
-                domain: "sciencedaily.com".to_string(),
-                suggested_feed: Some("https://www.sciencedaily.com/rss/all.xml".to_string()),
-                category: "Bilim".to_string(),
-            });
-        } else if is_finance {
-            results.push(DiscoveredSource {
-                name: "BloombergHT".to_string(),
-                domain: "bloomberght.com".to_string(),
-                suggested_feed: Some("https://www.bloomberght.com/rss".to_string()),
-                category: "Ekonomi".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Dunya Gazetesi".to_string(),
-                domain: "dunya.com".to_string(),
-                suggested_feed: Some("https://www.dunya.com/rss".to_string()),
-                category: "Finans".to_string(),
-            });
-        } else {
-            // Default global tech & programming mix
-            results.push(DiscoveredSource {
-                name: "Hacker News".to_string(),
-                domain: "news.ycombinator.com".to_string(),
-                suggested_feed: Some("https://news.ycombinator.com/rss".to_string()),
-                category: "Yazilim & Girisim".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "Ars Technica".to_string(),
-                domain: "arstechnica.com".to_string(),
-                suggested_feed: Some("https://feeds.arstechnica.com/arstechnica/index".to_string()),
-                category: "Teknoloji".to_string(),
-            });
-            results.push(DiscoveredSource {
-                name: "The Verge".to_string(),
-                domain: "theverge.com".to_string(),
-                suggested_feed: Some("https://www.theverge.com/rss/index.xml".to_string()),
-                category: "Teknoloji".to_string(),
-            });
+        // 2. Multi-token and semantic scoring over CURATED_SOURCES
+        let raw_tokens: Vec<&str> = q_norm
+            .split(&[' ', ',', ';', ':', '!', '?', '-', '_', '(', ')', '"', '\''][..])
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .collect();
+
+        let mut scored_entries: Vec<(usize, &CuratedEntry)> = CURATED_SOURCES
+            .iter()
+            .map(|entry| {
+                let s = score_curated_entry(entry, &raw_tokens, &q_norm);
+                (s, entry)
+            })
+            .filter(|(s, _)| *s > 0)
+            .collect();
+
+        // Sort descending by match score
+        scored_entries.sort_by(|a, b| b.0.cmp(&a.0));
+
+        let mut results = direct_sources;
+
+        // Take up to 15 top scored entries
+        for (_, entry) in scored_entries.into_iter().take(15) {
+            // Avoid duplicate domain with direct_sources
+            if !results.iter().any(|r| r.domain.eq_ignore_ascii_case(entry.domain)) {
+                results.push(DiscoveredSource {
+                    name: entry.name.to_string(),
+                    domain: entry.domain.to_string(),
+                    suggested_feed: Some(entry.feed_url.to_string()),
+                    category: entry.category.to_string(),
+                });
+            }
+        }
+
+        // If still empty (e.g. unrecognizable prompt), fallback to top general sources
+        if results.is_empty() {
+            let fallbacks = ["arstechnica.com", "theverge.com", "gamingonlinux.com", "techcrunch.com", "thehackernews.com"];
+            for dom in &fallbacks {
+                if let Some(entry) = CURATED_SOURCES.iter().find(|e| e.domain == *dom) {
+                    results.push(DiscoveredSource {
+                        name: entry.name.to_string(),
+                        domain: entry.domain.to_string(),
+                        suggested_feed: Some(entry.feed_url.to_string()),
+                        category: entry.category.to_string(),
+                    });
+                }
+            }
         }
 
         results
@@ -1181,4 +1026,726 @@ fn safe_truncate_str(s: &str, max_chars: usize) -> &str {
         Some((idx, _)) => &s[..idx],
         None => s,
     }
+}
+
+fn normalize_turkish_chars(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'ı' | 'İ' => 'i',
+            'ğ' | 'Ğ' => 'g',
+            'ü' | 'Ü' => 'u',
+            'ş' | 'Ş' => 's',
+            'ö' | 'Ö' => 'o',
+            'ç' | 'Ç' => 'c',
+            _ => c.to_ascii_lowercase(),
+        })
+        .collect()
+}
+
+fn domain_to_display_name(domain: &str) -> String {
+    let main_part = domain.split('.').next().unwrap_or(domain);
+    let mut chars = main_part.chars();
+    match chars.next() {
+        None => domain.to_string(),
+        Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
+pub struct CuratedEntry {
+    pub name: &'static str,
+    pub domain: &'static str,
+    pub feed_url: &'static str,
+    pub category: &'static str,
+    pub tags: &'static [&'static str],
+}
+
+pub static CURATED_SOURCES: &[CuratedEntry] = &[
+    // Linux Gaming & Steam
+    CuratedEntry {
+        name: "GamingOnLinux",
+        domain: "gamingonlinux.com",
+        feed_url: "https://www.gamingonlinux.com/article_rss.php",
+        category: "Linux & Oyun",
+        tags: &["linux", "gaming", "steam", "deck", "steamdeck", "proton", "wine", "games", "vulkan", "emulation", "oyun", "cachyos", "omarchy"],
+    },
+    CuratedEntry {
+        name: "Boiling Steam",
+        domain: "boilingsteam.com",
+        feed_url: "https://boilingsteam.com/feed/",
+        category: "Linux & Oyun",
+        tags: &["linux", "gaming", "steam", "deck", "steamdeck", "proton", "games", "oyun", "handheld"],
+    },
+    CuratedEntry {
+        name: "Linux Game Consortium",
+        domain: "linuxgameconsortium.com",
+        feed_url: "https://linuxgameconsortium.com/feed/",
+        category: "Linux & Oyun",
+        tags: &["linux", "gaming", "games", "steam", "oyun", "indie"],
+    },
+    CuratedEntry {
+        name: "Steam News",
+        domain: "steampowered.com",
+        feed_url: "https://store.steampowered.com/feeds/news.html",
+        category: "Oyun",
+        tags: &["steam", "valve", "gaming", "deck", "steamdeck", "games", "oyun", "sales", "updates"],
+    },
+
+    // Linux & Kernel & Open Source
+    CuratedEntry {
+        name: "Phoronix",
+        domain: "phoronix.com",
+        feed_url: "https://www.phoronix.com/rss.php",
+        category: "Linux & Donanim",
+        tags: &["linux", "kernel", "hardware", "benchmark", "gpu", "mesa", "amd", "intel", "nvidia", "open source", "donanim"],
+    },
+    CuratedEntry {
+        name: "Arch Linux News",
+        domain: "archlinux.org",
+        feed_url: "https://archlinux.org/feeds/news/",
+        category: "Linux",
+        tags: &["linux", "arch", "distro", "package", "security", "open source", "acik kaynak"],
+    },
+    CuratedEntry {
+        name: "OMG! Ubuntu",
+        domain: "omgubuntu.co.uk",
+        feed_url: "https://www.omgubuntu.co.uk/feed",
+        category: "Linux",
+        tags: &["linux", "ubuntu", "desktop", "apps", "gnome", "open source", "acik kaynak"],
+    },
+    CuratedEntry {
+        name: "It's FOSS",
+        domain: "itsfoss.com",
+        feed_url: "https://itsfoss.com/feed/",
+        category: "Acik Kaynak",
+        tags: &["linux", "foss", "open source", "acik kaynak", "distro", "tutorials", "apps"],
+    },
+    CuratedEntry {
+        name: "LWN.net",
+        domain: "lwn.net",
+        feed_url: "https://lwn.net/headlines/rss",
+        category: "Linux & Cekirdek",
+        tags: &["linux", "kernel", "cekirdek", "security", "development", "kernel.org", "open source"],
+    },
+    CuratedEntry {
+        name: "Linux Today",
+        domain: "linuxtoday.com",
+        feed_url: "https://www.linuxtoday.com/feed/",
+        category: "Linux",
+        tags: &["linux", "open source", "acik kaynak", "enterprise", "sysadmin", "distro"],
+    },
+    CuratedEntry {
+        name: "Fedora Magazine",
+        domain: "fedoramagazine.org",
+        feed_url: "https://fedoramagazine.org/feed/",
+        category: "Linux",
+        tags: &["linux", "fedora", "redhat", "desktop", "tutorials", "open source"],
+    },
+    CuratedEntry {
+        name: "Linux Magazine",
+        domain: "linux-magazine.com",
+        feed_url: "https://www.linux-magazine.com/rss/feed/lmi_full",
+        category: "Linux",
+        tags: &["linux", "sysadmin", "server", "open source", "acik kaynak"],
+    },
+    CuratedEntry {
+        name: "Baeldung on Linux",
+        domain: "baeldung.com",
+        feed_url: "https://www.baeldung.com/linux/feed",
+        category: "Linux",
+        tags: &["linux", "bash", "cli", "terminal", "commands", "tutorials"],
+    },
+
+    // Gaming (General)
+    CuratedEntry {
+        name: "PC Gamer",
+        domain: "pcgamer.com",
+        feed_url: "https://www.pcgamer.com/rss/",
+        category: "Oyun",
+        tags: &["gaming", "pc", "games", "steam", "oyun", "hardware", "mods", "rpg", "fps"],
+    },
+    CuratedEntry {
+        name: "Rock Paper Shotgun",
+        domain: "rockpapershotgun.com",
+        feed_url: "https://www.rockpapershotgun.com/feed",
+        category: "Oyun",
+        tags: &["gaming", "pc", "indie", "games", "steam", "oyun", "reviews"],
+    },
+    CuratedEntry {
+        name: "Eurogamer",
+        domain: "eurogamer.net",
+        feed_url: "https://www.eurogamer.net/feed",
+        category: "Oyun",
+        tags: &["gaming", "console", "playstation", "xbox", "nintendo", "pc", "oyun", "reviews"],
+    },
+    CuratedEntry {
+        name: "Kotaku",
+        domain: "kotaku.com",
+        feed_url: "https://kotaku.com/rss",
+        category: "Oyun",
+        tags: &["gaming", "games", "culture", "nintendo", "playstation", "xbox", "oyun"],
+    },
+    CuratedEntry {
+        name: "Polygon",
+        domain: "polygon.com",
+        feed_url: "https://www.polygon.com/rss/index.xml",
+        category: "Oyun",
+        tags: &["gaming", "entertainment", "reviews", "culture", "movies", "oyun"],
+    },
+    CuratedEntry {
+        name: "Oyungezer",
+        domain: "oyungezer.com.tr",
+        feed_url: "https://oyungezer.com.tr/rss",
+        category: "Oyun",
+        tags: &["oyun", "gaming", "turkce", "inceleme", "steam", "konsol"],
+    },
+
+    // Cyber Security
+    CuratedEntry {
+        name: "The Hacker News",
+        domain: "thehackernews.com",
+        feed_url: "https://feeds.feedburner.com/TheHackersNews",
+        category: "Siber Guvenlik",
+        tags: &["security", "cyber", "cybersecurity", "siber", "guvenlik", "hacker", "malware", "vulnerability", "infosec", "cve"],
+    },
+    CuratedEntry {
+        name: "BleepingComputer",
+        domain: "bleepingcomputer.com",
+        feed_url: "https://www.bleepingcomputer.com/feed/",
+        category: "Siber Guvenlik",
+        tags: &["security", "cyber", "ransomware", "malware", "cybersecurity", "siber", "guvenlik", "breach", "hacker", "cve"],
+    },
+    CuratedEntry {
+        name: "Krebs on Security",
+        domain: "krebsonsecurity.com",
+        feed_url: "https://krebsonsecurity.com/feed/",
+        category: "Siber Guvenlik",
+        tags: &["security", "cyber", "cybercrime", "investigation", "siber", "guvenlik", "infosec"],
+    },
+    CuratedEntry {
+        name: "Dark Reading",
+        domain: "darkreading.com",
+        feed_url: "https://www.darkreading.com/rss.xml",
+        category: "Siber Guvenlik",
+        tags: &["security", "cyber", "infosec", "threats", "siber", "guvenlik", "enterprise"],
+    },
+    CuratedEntry {
+        name: "Schneier on Security",
+        domain: "schneier.com",
+        feed_url: "https://www.schneier.com/feed/atom/",
+        category: "Siber Guvenlik",
+        tags: &["security", "cyber", "cryptography", "privacy", "gizlilik", "siber", "guvenlik"],
+    },
+
+    // Technology, AI & Startups
+    CuratedEntry {
+        name: "TechCrunch",
+        domain: "techcrunch.com",
+        feed_url: "https://techcrunch.com/feed/",
+        category: "Teknoloji & Girisim",
+        tags: &["startups", "venture", "girisim", "tech", "silicon valley", "funding", "ai", "yapay zeka", "apps"],
+    },
+    CuratedEntry {
+        name: "MIT Tech Review",
+        domain: "technologyreview.com",
+        feed_url: "https://www.technologyreview.com/feed/",
+        category: "Teknoloji & AI",
+        tags: &["ai", "yapay zeka", "tech", "computing", "research", "mit", "bilim", "science"],
+    },
+    CuratedEntry {
+        name: "Wired",
+        domain: "wired.com",
+        feed_url: "https://www.wired.com/feed/rss",
+        category: "Teknoloji",
+        tags: &["tech", "teknoloji", "culture", "science", "ai", "yapay zeka"],
+    },
+    CuratedEntry {
+        name: "The Verge",
+        domain: "theverge.com",
+        feed_url: "https://www.theverge.com/rss/index.xml",
+        category: "Teknoloji",
+        tags: &["tech", "teknoloji", "gadgets", "ai", "yapay zeka", "reviews", "mobile", "apple", "google"],
+    },
+    CuratedEntry {
+        name: "Ars Technica",
+        domain: "arstechnica.com",
+        feed_url: "https://feeds.arstechnica.com/arstechnica/index",
+        category: "Teknoloji",
+        tags: &["tech", "teknoloji", "science", "policy", "gadgets", "ai"],
+    },
+    CuratedEntry {
+        name: "The Next Web",
+        domain: "thenextweb.com",
+        feed_url: "https://thenextweb.com/feed",
+        category: "Teknoloji",
+        tags: &["tech", "europe", "startups", "ai", "innovation"],
+    },
+    CuratedEntry {
+        name: "Engadget",
+        domain: "engadget.com",
+        feed_url: "https://www.engadget.com/rss.xml",
+        category: "Teknoloji",
+        tags: &["tech", "teknoloji", "gadgets", "gear", "mobile", "reviews"],
+    },
+    CuratedEntry {
+        name: "Gizmodo",
+        domain: "gizmodo.com",
+        feed_url: "https://gizmodo.com/feed",
+        category: "Teknoloji",
+        tags: &["tech", "teknoloji", "science", "design", "culture"],
+    },
+    CuratedEntry {
+        name: "Mashable",
+        domain: "mashable.com",
+        feed_url: "https://mashable.com/feeds/rss/all",
+        category: "Teknoloji",
+        tags: &["tech", "teknoloji", "digital", "entertainment"],
+    },
+
+    // Hardware & PC Enthusiast
+    CuratedEntry {
+        name: "Tom's Hardware",
+        domain: "tomshardware.com",
+        feed_url: "https://www.tomshardware.com/feeds/all",
+        category: "Donanim",
+        tags: &["hardware", "donanim", "cpu", "gpu", "pc", "benchmarks", "intel", "amd", "nvidia", "ssd", "motherboard"],
+    },
+    CuratedEntry {
+        name: "Wccftech",
+        domain: "wccftech.com",
+        feed_url: "https://wccftech.com/feed/",
+        category: "Donanim",
+        tags: &["hardware", "donanim", "leaks", "nvidia", "amd", "intel", "gaming", "gpu", "cpu"],
+    },
+    CuratedEntry {
+        name: "Hardware Plus",
+        domain: "hwp.com.tr",
+        feed_url: "https://hwp.com.tr/feed",
+        category: "Donanim",
+        tags: &["donanim", "hardware", "inceleme", "pc", "telefon"],
+    },
+    CuratedEntry {
+        name: "DonanimHaber",
+        domain: "donanimhaber.com",
+        feed_url: "https://www.donanimhaber.com/rss/tum/",
+        category: "Donanim",
+        tags: &["donanim", "teknoloji", "ekran karti", "islemci", "turkce", "hardware"],
+    },
+    CuratedEntry {
+        name: "Donanim Arsivi",
+        domain: "donanimarsivi.com",
+        feed_url: "https://donanimarsivi.com/feed/",
+        category: "Donanim",
+        tags: &["donanim", "sistem", "pc", "oyun", "hardware", "fiyat performans"],
+    },
+    CuratedEntry {
+        name: "Donanim Gunlugu",
+        domain: "donanimgunlugu.com",
+        feed_url: "https://donanimgunlugu.com/feed",
+        category: "Donanim",
+        tags: &["donanim", "teknoloji", "akilli telefon", "bilgisayar", "hardware"],
+    },
+
+    // Mobile Ecosystems
+    CuratedEntry {
+        name: "9to5Mac",
+        domain: "9to5mac.com",
+        feed_url: "https://9to5mac.com/feed/",
+        category: "Mobil",
+        tags: &["apple", "iphone", "mac", "macbook", "ios", "mobil", "ipad"],
+    },
+    CuratedEntry {
+        name: "Android Authority",
+        domain: "androidauthority.com",
+        feed_url: "https://www.androidauthority.com/feed",
+        category: "Mobil",
+        tags: &["android", "google", "samsung", "mobil", "pixel", "apps"],
+    },
+
+    // Software Development & DevOps
+    CuratedEntry {
+        name: "GitHub Blog",
+        domain: "github.blog",
+        feed_url: "https://github.blog/feed/",
+        category: "Yazilim",
+        tags: &["git", "github", "programming", "developer", "yazilim", "open source", "devops"],
+    },
+    CuratedEntry {
+        name: "Dev.to",
+        domain: "dev.to",
+        feed_url: "https://dev.to/feed",
+        category: "Yazilim",
+        tags: &["coding", "programming", "developer", "yazilim", "webdev", "python", "rust"],
+    },
+    CuratedEntry {
+        name: "Lobste.rs",
+        domain: "lobste.rs",
+        feed_url: "https://lobste.rs/rss",
+        category: "Yazilim",
+        tags: &["programming", "yazilim", "systems", "rust", "unix", "devops"],
+    },
+    CuratedEntry {
+        name: "Hacker News",
+        domain: "news.ycombinator.com",
+        feed_url: "https://news.ycombinator.com/rss",
+        category: "Yazilim & Girisim",
+        tags: &["tech", "startups", "programming", "yazilim", "yc", "girisim"],
+    },
+    CuratedEntry {
+        name: "Rust Blog",
+        domain: "blog.rust-lang.org",
+        feed_url: "https://blog.rust-lang.org/feed.xml",
+        category: "Yazilim",
+        tags: &["rust", "rustlang", "programming", "yazilim", "systems", "cargo"],
+    },
+    CuratedEntry {
+        name: "Go Blog",
+        domain: "go.dev",
+        feed_url: "https://go.dev/blog/feed.atom",
+        category: "Yazilim",
+        tags: &["golang", "go", "programming", "yazilim", "backend", "cloud"],
+    },
+
+    // Science & Space
+    CuratedEntry {
+        name: "NASA Breaking News",
+        domain: "nasa.gov",
+        feed_url: "https://www.nasa.gov/news-release/feed/",
+        category: "Bilim & Uzay",
+        tags: &["space", "uzay", "nasa", "astronomy", "moon", "mars", "bilim", "science"],
+    },
+    CuratedEntry {
+        name: "Space.com",
+        domain: "space.com",
+        feed_url: "https://www.space.com/feeds/all",
+        category: "Bilim & Uzay",
+        tags: &["space", "uzay", "rocket", "spacex", "astronomy", "bilim", "science"],
+    },
+    CuratedEntry {
+        name: "Phys.org",
+        domain: "phys.org",
+        feed_url: "https://phys.org/rss-feed/",
+        category: "Bilim",
+        tags: &["physics", "fizik", "science", "bilim", "quantum", "research"],
+    },
+    CuratedEntry {
+        name: "ScienceDaily",
+        domain: "sciencedaily.com",
+        feed_url: "https://www.sciencedaily.com/rss/all.xml",
+        category: "Bilim",
+        tags: &["science", "bilim", "research", "health", "biology", "environment"],
+    },
+    CuratedEntry {
+        name: "Evrim Agaci",
+        domain: "evrimagaci.org",
+        feed_url: "https://evrimagaci.org/rss.xml",
+        category: "Bilim",
+        tags: &["bilim", "evrim", "biyoloji", "fizik", "populer bilim", "science"],
+    },
+
+    // US Local News
+    CuratedEntry {
+        name: "The Texas Tribune",
+        domain: "texastribune.org",
+        feed_url: "https://www.texastribune.org/feeds/main/",
+        category: "Yerel",
+        tags: &["texas", "austin", "local", "yerel", "politics", "news"],
+    },
+    CuratedEntry {
+        name: "Austin Monitor",
+        domain: "austinmonitor.com",
+        feed_url: "https://www.austinmonitor.com/feed/",
+        category: "Yerel",
+        tags: &["austin", "texas", "local", "yerel", "city council", "news"],
+    },
+
+    // Turkish Tech & Startups
+    CuratedEntry {
+        name: "Webrazzi",
+        domain: "webrazzi.com",
+        feed_url: "https://webrazzi.com/feed/",
+        category: "Teknoloji & Girisim",
+        tags: &["teknoloji", "girisim", "yatirim", "turkiye", "startup", "tech"],
+    },
+    CuratedEntry {
+        name: "ShiftDelete",
+        domain: "shiftdelete.net",
+        feed_url: "https://shiftdelete.net/feed",
+        category: "Teknoloji",
+        tags: &["teknoloji", "mobil", "telefon", "turkce", "inceleme"],
+    },
+    CuratedEntry {
+        name: "Webtekno",
+        domain: "webtekno.com",
+        feed_url: "https://www.webtekno.com/rss.xml",
+        category: "Teknoloji",
+        tags: &["teknoloji", "bilim", "oyun", "turkce", "haber"],
+    },
+    CuratedEntry {
+        name: "LOG",
+        domain: "log.com.tr",
+        feed_url: "https://www.log.com.tr/feed/",
+        category: "Teknoloji",
+        tags: &["teknoloji", "tasarim", "otomobil", "lifestyle"],
+    },
+    CuratedEntry {
+        name: "Teknoblog",
+        domain: "teknoblog.com",
+        feed_url: "https://www.teknoblog.com/feed/",
+        category: "Teknoloji",
+        tags: &["teknoloji", "turkce", "mobil", "inceleme"],
+    },
+    CuratedEntry {
+        name: "CHIP Turkiye",
+        domain: "chip.com.tr",
+        feed_url: "https://www.chip.com.tr/rss",
+        category: "Teknoloji",
+        tags: &["teknoloji", "bilgisayar", "yazilim", "donanim"],
+    },
+    CuratedEntry {
+        name: "Swipeline",
+        domain: "swipeline.co",
+        feed_url: "https://swipeline.co/feed/",
+        category: "Girisimcilik",
+        tags: &["girisim", "startup", "yatirim", "ekosistem"],
+    },
+    CuratedEntry {
+        name: "Egirisim",
+        domain: "egirisim.com",
+        feed_url: "https://egirisim.com/feed/",
+        category: "Girisimcilik",
+        tags: &["girisim", "startup", "yatirim", "girisimci"],
+    },
+    CuratedEntry {
+        name: "BTK Haber",
+        domain: "btk.gov.tr",
+        feed_url: "https://www.btk.gov.tr/rss/news",
+        category: "Bilisim & Guvenlik",
+        tags: &["bilisim", "btk", "guvenlik", "telekom", "siber"],
+    },
+
+    // Turkish Agenda, Politics & Local
+    CuratedEntry {
+        name: "Haberler Yerel",
+        domain: "haberler.com",
+        feed_url: "https://rss.haberler.com/rss.asp?kategori=yerel",
+        category: "Yerel",
+        tags: &["yerel", "istanbul", "ankara", "izmir", "sehir", "belediye", "kent", "asayis", "iller"],
+    },
+    CuratedEntry {
+        name: "Yeni Asir",
+        domain: "yeniasir.com.tr",
+        feed_url: "https://www.yeniasir.com.tr/rss/anasayfa.xml",
+        category: "Yerel",
+        tags: &["yerel", "ege", "izmir", "aydin", "mugla", "manisa", "sehir", "kent"],
+    },
+    CuratedEntry {
+        name: "Bursa Hakimiyet",
+        domain: "bursahakimiyet.com.tr",
+        feed_url: "https://www.bursahakimiyet.com.tr/rss",
+        category: "Yerel",
+        tags: &["yerel", "bursa", "marmara", "istanbul", "kent", "belediye", "sehir"],
+    },
+    CuratedEntry {
+        name: "Sozcu",
+        domain: "sozcu.com.tr",
+        feed_url: "https://www.sozcu.com.tr/feeds-son-dakika",
+        category: "Gundem",
+        tags: &["siyaset", "siyasi", "politika", "gundem", "son dakika", "turkiye", "gazete", "haber"],
+    },
+    CuratedEntry {
+        name: "Haberturk",
+        domain: "haberturk.com",
+        feed_url: "https://www.haberturk.com/rss",
+        category: "Gundem",
+        tags: &["siyaset", "siyasi", "politika", "gundem", "haber", "son dakika", "turkiye"],
+    },
+    CuratedEntry {
+        name: "NTV Gundem",
+        domain: "ntv.com.tr",
+        feed_url: "https://www.ntv.com.tr/gundem.rss",
+        category: "Gundem",
+        tags: &["siyaset", "siyasi", "politika", "gundem", "turkiye", "manset", "haber"],
+    },
+    CuratedEntry {
+        name: "BBC Turkce",
+        domain: "bbc.com",
+        feed_url: "https://feeds.bbci.co.uk/turkce/rss.xml",
+        category: "Siyaset & Dunya",
+        tags: &["siyaset", "siyasi", "politika", "dunya", "analiz", "tarafsiz", "haber"],
+    },
+    CuratedEntry {
+        name: "Diken",
+        domain: "diken.com.tr",
+        feed_url: "https://www.diken.com.tr/feed/",
+        category: "Siyaset",
+        tags: &["siyaset", "siyasi", "politika", "haber", "yorum", "bagimsiz"],
+    },
+    CuratedEntry {
+        name: "Gazete Duvar",
+        domain: "gazeteduvar.com.tr",
+        feed_url: "https://www.gazeteduvar.com.tr/export/rss",
+        category: "Siyaset",
+        tags: &["siyaset", "siyasi", "politika", "kultur", "yazarlar"],
+    },
+    CuratedEntry {
+        name: "Anadolu Ajansi",
+        domain: "aa.com.tr",
+        feed_url: "https://www.aa.com.tr/tr/rss/default?cat=guncel",
+        category: "Gundem",
+        tags: &["ajans", "resmi", "guncel", "turkiye", "haber"],
+    },
+    CuratedEntry {
+        name: "Cumhuriyet",
+        domain: "cumhuriyet.com.tr",
+        feed_url: "https://www.cumhuriyet.com.tr/rss",
+        category: "Siyaset",
+        tags: &["siyaset", "siyasi", "politika", "cumhuriyet", "gazete", "haber"],
+    },
+
+    // World & Economics
+    CuratedEntry {
+        name: "BBC News World",
+        domain: "bbc.com",
+        feed_url: "https://feeds.bbci.co.uk/news/world/rss.xml",
+        category: "Dunya",
+        tags: &["world", "international", "global", "news", "dunya", "haber"],
+    },
+    CuratedEntry {
+        name: "BloombergHT",
+        domain: "bloomberght.com",
+        feed_url: "https://www.bloomberght.com/rss",
+        category: "Ekonomi",
+        tags: &["ekonomi", "borsa", "finans", "dolar", "piyasa", "finance"],
+    },
+    CuratedEntry {
+        name: "Dunya Gazetesi",
+        domain: "dunya.com",
+        feed_url: "https://www.dunya.com/rss",
+        category: "Ekonomi",
+        tags: &["ekonomi", "is dunyasi", "finans", "ihracat", "finance"],
+    },
+];
+
+fn score_curated_entry(entry: &CuratedEntry, tokens: &[&str], q_norm: &str) -> usize {
+    let mut score = 0;
+    let name_low = entry.name.to_lowercase();
+    let dom_low = entry.domain.to_lowercase();
+    let cat_low = entry.category.to_lowercase();
+
+    // Local news query guard: If user explicitly asked for local news, restrict to local category
+    if (q_norm.contains("yerel") || q_norm.contains("local")) && entry.category != "Yerel" {
+        return 0;
+    }
+
+    // Direct substring in name, domain or category
+    if q_norm.len() >= 4 {
+        if name_low.contains(q_norm) || dom_low.contains(q_norm) {
+            score += 70;
+        }
+        if cat_low.contains(q_norm) {
+            score += 40;
+        }
+    }
+
+    // Compound phrases & bigrams
+    let compound_phrases: &[(&str, &[&str])] = &[
+        ("linux gaming", &["linux", "gaming"]),
+        ("linux oyun", &["linux", "gaming"]),
+        ("steam deck", &["steam", "deck"]),
+        ("open source", &["open source", "foss"]),
+        ("acik kaynak", &["acik kaynak", "foss"]),
+        ("cyber security", &["cyber", "security"]),
+        ("siber guvenlik", &["siber", "guvenlik"]),
+        ("yapay zeka", &["ai", "yapay zeka"]),
+        ("local news", &["local", "yerel"]),
+        ("yerel haber", &["yerel", "local"]),
+        ("siyasi haber", &["siyaset", "haber"]),
+        ("siyaset haber", &["siyaset", "haber"]),
+        ("politika haber", &["politika", "haber"]),
+    ];
+
+    for (phrase, key_terms) in compound_phrases {
+        if q_norm.contains(phrase) {
+            let matches_all = key_terms.iter().all(|term| {
+                entry.tags.iter().any(|t| t.contains(term))
+                    || cat_low.contains(term)
+                    || name_low.contains(term)
+            });
+            if matches_all {
+                score += 80;
+            }
+        }
+    }
+
+    // Stop words
+    let stop_words = [
+        "find", "more", "add", "news", "feed", "feeds", "source", "sources", "site", "sites",
+        "and", "the", "for", "with", "from", "top", "best", "some", "bana", "ekle", "haber",
+        "haberler", "haberleri", "haberlerini", "bul", "getir", "siteleri", "kaynak", "kaynaklar",
+        "kaynaklari", "kaynaklarini", "olan", "ile", "ve", "de", "da", "icin", "en", "iyi"
+    ];
+
+    for &tok in tokens {
+        if stop_words.contains(&tok) || tok.len() < 2 {
+            continue;
+        }
+
+        // Exact matches
+        if name_low.contains(tok) {
+            score += 30;
+        }
+        if dom_low.contains(tok) {
+            score += 30;
+        }
+        if cat_low.contains(tok) {
+            score += 25;
+        }
+
+        for &tag in entry.tags {
+            if tag == tok {
+                score += 20;
+            } else if tag.contains(tok) || tok.contains(tag) {
+                score += 10;
+            }
+        }
+
+        // Semantic concepts
+        if (tok == "gaming" || tok == "games" || tok == "game" || tok == "oyun")
+            && (entry.tags.contains(&"gaming") || entry.tags.contains(&"games") || entry.tags.contains(&"oyun"))
+        {
+            score += 25;
+        }
+        if (tok == "linux" || tok == "kernel" || tok == "cekirdek" || tok == "foss")
+            && (entry.tags.contains(&"linux") || entry.tags.contains(&"foss"))
+        {
+            score += 25;
+        }
+        if (tok == "steam" || tok == "proton" || tok == "deck")
+            && (entry.tags.contains(&"steam") || entry.tags.contains(&"deck"))
+        {
+            score += 30;
+        }
+        if (tok == "security" || tok == "cyber" || tok == "siber" || tok == "guvenlik" || tok == "hacker")
+            && (entry.tags.contains(&"security") || entry.tags.contains(&"siber"))
+        {
+            score += 30;
+        }
+        if (tok == "ai" || tok == "yapay" || tok == "zeka")
+            && (entry.tags.contains(&"ai") || entry.tags.contains(&"yapay zeka"))
+        {
+            score += 30;
+        }
+        if (tok.starts_with("siyas") || tok.starts_with("politik") || tok == "politics")
+            && (entry.tags.contains(&"siyaset") || entry.tags.contains(&"siyasi") || entry.tags.contains(&"politika") || entry.category == "Siyaset" || entry.category == "Gundem")
+        {
+            score += 45;
+        }
+        if (tok == "yerel" || tok == "local" || tok == "belediye" || tok == "sehir")
+            && entry.category == "Yerel"
+        {
+            score += 40;
+        }
+    }
+
+    score
 }

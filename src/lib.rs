@@ -193,10 +193,31 @@ impl QuickNewsApp {
         let candidates = AiEngine::discover_sources_from_prompt(prompt).await;
         let mut added = Vec::new();
 
+        let existing = self.storage.load_sources().unwrap_or_default();
+        let mut seen_domains: std::collections::HashSet<String> = existing
+            .iter()
+            .map(|s| s.domain.trim().to_lowercase())
+            .collect();
+        let mut seen_feeds: std::collections::HashSet<String> = existing
+            .iter()
+            .map(|s| s.feed_url.trim().to_lowercase())
+            .collect();
+
         for mut candidate in candidates {
+            let d_clean = candidate.domain.trim().to_lowercase();
+            if seen_domains.contains(&d_clean) {
+                // Kaynak zaten mevcut listede bulunuyor, yeni adaylara odaklan
+                continue;
+            }
+
             let initial_feed = candidate.suggested_feed.clone();
 
             let valid_feed = if let Some(ref sf) = initial_feed {
+                let sf_clean = sf.trim().to_lowercase();
+                if seen_feeds.contains(&sf_clean) {
+                    continue;
+                }
+
                 if FeedParser::verify_feed_endpoint(sf).await.is_ok() {
                     Some(sf.clone())
                 } else {
@@ -235,6 +256,8 @@ impl QuickNewsApp {
                 &verified_url,
                 &candidate.category,
             ) {
+                seen_domains.insert(d_clean);
+                seen_feeds.insert(verified_url.trim().to_lowercase());
                 added.push(candidate);
             }
         }

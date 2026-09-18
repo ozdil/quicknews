@@ -50,7 +50,10 @@ Rectangle {
             return sCat.indexOf("yerel") !== -1 || sCat.indexOf("sehir") !== -1 || sCat.indexOf("belediye") !== -1 || sName.indexOf("asir") !== -1 || sName.indexOf("bursa") !== -1;
         }
         if (c === "linux") {
-            return sCat.indexOf("linux") !== -1 || sName.indexOf("linux") !== -1 || sDomain.indexOf("phoronix") !== -1;
+            return sCat.indexOf("linux") !== -1 || sName.indexOf("linux") !== -1 || sDomain.indexOf("phoronix") !== -1 || sDomain.indexOf("gamingonlinux") !== -1 || sDomain.indexOf("boilingsteam") !== -1;
+        }
+        if (c === "oyun" || c === "gaming") {
+            return sCat.indexOf("oyun") !== -1 || sCat.indexOf("game") !== -1 || sCat.indexOf("gaming") !== -1 || sName.indexOf("game") !== -1 || sName.indexOf("oyun") !== -1 || sDomain.indexOf("steam") !== -1 || sDomain.indexOf("gamingonlinux") !== -1 || sDomain.indexOf("boilingsteam") !== -1 || sDomain.indexOf("pcgamer") !== -1 || sDomain.indexOf("rockpapershotgun") !== -1;
         }
         if (c === "teknoloji") {
             return sCat.indexOf("teknoloji") !== -1 || sCat.indexOf("bilisim") !== -1 || sCat.indexOf("dijital") !== -1;
@@ -60,6 +63,9 @@ Rectangle {
         }
         if (c === "bilim") {
             return sCat.indexOf("bilim") !== -1 || sName.indexOf("evrim") !== -1;
+        }
+        if (c === "siber guvenlik" || c === "guvenlik" || c === "cybersecurity") {
+            return sCat.indexOf("guvenlik") !== -1 || sCat.indexOf("security") !== -1 || sCat.indexOf("cyber") !== -1 || sName.indexOf("hacker") !== -1 || sDomain.indexOf("bleepingcomputer") !== -1;
         }
         if (c === "girisimcilik" || c === "girisim") {
             return sCat.indexOf("girisim") !== -1;
@@ -89,8 +95,10 @@ Rectangle {
             "Yerel": "cat_local",
             "Teknoloji": "cat_tech",
             "Linux": "cat_linux",
+            "Oyun": "cat_gaming",
             "Donanım": "cat_hardware",
             "Bilim": "cat_science",
+            "Siber Güvenlik": "cat_cybersecurity",
             "Girişimcilik": "cat_startups"
         };
         var k = keyMap[cat];
@@ -210,7 +218,7 @@ Rectangle {
             spacing: 6
 
             Repeater {
-                model: ["Tümü", "Gündem", "Siyaset", "Yerel", "Teknoloji", "Linux", "Donanım", "Bilim", "Girişimcilik"]
+                model: ["Tümü", "Gündem", "Siyaset", "Yerel", "Teknoloji", "Linux", "Oyun", "Donanım", "Bilim", "Girişimcilik"]
 
                 Rectangle {
                     width: catText.implicitWidth + 16

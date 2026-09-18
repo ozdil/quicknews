@@ -68,8 +68,10 @@ QtObject {
         "cat_local": { "en": "Local", "tr": "Yerel" },
         "cat_tech": { "en": "Technology", "tr": "Teknoloji" },
         "cat_linux": { "en": "Linux", "tr": "Linux" },
+        "cat_gaming": { "en": "Gaming", "tr": "Oyun" },
         "cat_hardware": { "en": "Hardware", "tr": "Donanım" },
         "cat_science": { "en": "Science", "tr": "Bilim" },
+        "cat_cybersecurity": { "en": "Cybersecurity", "tr": "Siber Güvenlik" },
         "cat_startups": { "en": "Startups", "tr": "Girişimcilik" },
 
         // Headlines List

@@ -637,4 +637,27 @@ async fn test_verify_feed_endpoint_rejects_html_and_dead_feeds() {
     assert!(empty_items.is_empty());
 }
 
+#[test]
+fn test_ai_discover_linux_gaming_and_multi_topic() {
+    // 1. Linux and Linux Gaming discovery
+    let sources = AiEngine::resolve_curated_knowledge_base("find more linux news, find more linux gaming news");
+    assert!(!sources.is_empty());
+    assert!(sources.iter().any(|s| s.name == "GamingOnLinux"));
+    assert!(sources.iter().any(|s| s.name == "Boiling Steam"));
+    assert!(sources.iter().any(|s| s.name == "Linux Game Consortium"));
+    assert!(sources.iter().any(|s| s.name == "Phoronix"));
+
+    // 2. Cyber security discovery
+    let sec_sources = AiEngine::resolve_curated_knowledge_base("cyber security, hacking and malware analysis");
+    assert!(!sec_sources.is_empty());
+    assert!(sec_sources.iter().any(|s| s.name == "The Hacker News"));
+    assert!(sec_sources.iter().any(|s| s.name == "BleepingComputer"));
+
+    // 3. Steam deck and PC gaming
+    let game_sources = AiEngine::resolve_curated_knowledge_base("steam deck and pc gaming");
+    assert!(!game_sources.is_empty());
+    assert!(game_sources.iter().any(|s| s.name == "Steam News" || s.name == "PC Gamer" || s.name == "Rock Paper Shotgun"));
+}
+
+
 

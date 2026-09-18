@@ -537,15 +537,20 @@ Rectangle {
             try {
                 if (root.promptBuffer.trim().length > 0) {
                     var added = JSON.parse(root.promptBuffer);
-                    root.promptStatus = (I18n.currentLanguage === "en") ? ("Successfully added " + added.length + " new sources!") : ("Basariyla " + added.length + " yeni kaynak eklendi!");
-                    root.loadSources();
-                    root.syncFeeds();
+                    if (Array.isArray(added) && added.length > 0) {
+                        root.promptStatus = (I18n.currentLanguage === "en") ? ("Successfully added " + added.length + " new sources!") : ("Basariyla " + added.length + " yeni kaynak eklendi!");
+                        root.loadSources();
+                        root.syncFeeds();
+                    } else {
+                        root.promptStatus = (I18n.currentLanguage === "en") ? "All matching sources are already in your list or no active feeds found." : "Eslenen kaynaklar zaten listenizde ekli veya aktif akis bulunamadi.";
+                        root.loadSources();
+                    }
                 } else {
                     root.promptStatus = I18n.t("modal_controlled");
                     root.loadSources();
                 }
             } catch(e) {
-                root.promptStatus = (I18n.currentLanguage === "en") ? "Sources updated." : "Kaynaklar eklendi.";
+                root.promptStatus = (I18n.currentLanguage === "en") ? "Sources updated." : "Kaynaklar guncellendi.";
                 root.loadSources();
             }
             root.promptBuffer = "";
