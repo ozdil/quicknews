@@ -60,7 +60,13 @@ Rectangle {
                 var c = norm(root.activeCategory);
                 var aCat = norm(a.category || "");
                 var matchCat = false;
-                if (c === "linux") {
+                if (c === "gundem") {
+                    matchCat = aCat.indexOf("gundem") !== -1 || aCat.indexOf("genel") !== -1 || aCat.indexOf("ajans") !== -1;
+                } else if (c === "siyaset") {
+                    matchCat = aCat.indexOf("siyaset") !== -1 || aCat.indexOf("politika") !== -1 || aCat.indexOf("meclis") !== -1;
+                } else if (c === "yerel") {
+                    matchCat = aCat.indexOf("yerel") !== -1 || aCat.indexOf("sehir") !== -1 || aCat.indexOf("belediye") !== -1;
+                } else if (c === "linux") {
                     matchCat = aCat.indexOf("linux") !== -1 || (a.source_name && norm(a.source_name).indexOf("phoronix") !== -1);
                 } else if (c === "teknoloji") {
                     matchCat = aCat.indexOf("teknoloji") !== -1 || aCat.indexOf("bilisim") !== -1 || aCat.indexOf("dijital") !== -1;

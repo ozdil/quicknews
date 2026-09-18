@@ -70,18 +70,34 @@ impl QuickNewsApp {
         all_articles
     }
 
-    /// Fetches and cleans full article text (ad-free, image-free, AI structured).
+    /// Fetches and cleans full article text (ad-free, image-free, multi-page stitched, AI structured).
     pub async fn read_clean_article(&self, url: &str) -> Result<CleanArticle, SecurityError> {
         // Check cache first
         if let Some(cached) = self.storage.get_cached_content(url) {
             return Ok(cached);
         }
 
-        // Fetch raw HTML (up to 2 MiB, SSRF guarded)
+        // Fetch raw HTML of the first page (up to 2 MiB, SSRF guarded)
         let html_content = fetch_bounded_content(url, MAX_HTTP_PAYLOAD_SIZE, 8).await?;
         let mut article = ArticleExtractor::extract(&html_content, url);
 
-        // AI processes 100% of the article text: structures paragraphs, preserves lists, strips clutter
+        // Check for multi-page pagination (e.g. Phoronix, reviews, multi-page articles)
+        let pagination_urls = ArticleExtractor::detect_pagination_urls(&html_content, url);
+        if !pagination_urls.is_empty() {
+            let mut page_index = 2;
+            for page_url in pagination_urls {
+                if let Ok(page_html) = fetch_bounded_content(&page_url, MAX_HTTP_PAYLOAD_SIZE, 8).await {
+                    let page_article = ArticleExtractor::extract(&page_html, &page_url);
+                    let clean_page_text = page_article.content_text.trim();
+                    if clean_page_text.len() > 30 && !clean_page_text.starts_with("Haber metni ayrilamadi") {
+                        article.content_text.push_str(&format!("\n\n\n## Sayfa {}\n\n{}", page_index, clean_page_text));
+                        page_index += 1;
+                    }
+                }
+            }
+        }
+
+        // AI processes 100% of the stitched article text: structures paragraphs, preserves lists, strips clutter
         let ai_structured_text = AiEngine::clean_full_article_content(&article.title, &article.content_text).await;
         article.content_text = ai_structured_text;
         let word_count = article.content_text.split_whitespace().count();

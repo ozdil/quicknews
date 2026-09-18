@@ -184,7 +184,13 @@ Rectangle {
         if (!tag) return;
         var mappedCat = tag;
         var t = norm(tag);
-        if (t.indexOf("linux") !== -1) {
+        if (t.indexOf("gundem") !== -1 || t.indexOf("genel") !== -1) {
+            mappedCat = "Gündem";
+        } else if (t.indexOf("siyaset") !== -1 || t.indexOf("politika") !== -1) {
+            mappedCat = "Siyaset";
+        } else if (t.indexOf("yerel") !== -1 || t.indexOf("belediye") !== -1) {
+            mappedCat = "Yerel";
+        } else if (t.indexOf("linux") !== -1) {
             mappedCat = "Linux";
         } else if (t.indexOf("teknoloji") !== -1 || t.indexOf("yapay zeka") !== -1) {
             mappedCat = "Teknoloji";

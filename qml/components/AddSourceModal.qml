@@ -142,6 +142,9 @@ Rectangle {
 
                 Repeater {
                     model: [
+                        "Turkiye gundemi ve siyasi haber kaynaklarini ekle",
+                        "Guvenilir genel haber gazeteleri ve ajanslarini ekle",
+                        "Istanbul, Ankara ve yerel sehir haberlerini ekle",
                         "Turkiye'deki en iyi teknoloji sayfalarindan 10 tanesini ekle",
                         "Acik kaynak ve Linux odakli 5 blog ekle",
                         "Populer bilim ve uzay haber sitelerini ekle",

@@ -300,4 +300,124 @@ impl ArticleExtractor {
             out.push(cleaned);
         }
     }
+
+    /// Detects pagination URLs for multi-page articles (e.g. Phoronix, reviews, paginated reports).
+    /// Enforces strict same-origin, same-base-path checks and caps at 10 pages maximum.
+    pub fn detect_pagination_urls(html_str: &str, base_url: &str) -> Vec<String> {
+        let base_parsed = match url::Url::parse(base_url) {
+            Ok(u) => u,
+            Err(_) => return Vec::new(),
+        };
+
+        let document = Html::parse_document(html_str);
+        let mut candidate_urls = Vec::new();
+
+        // 1. Selector options (e.g. Phoronix <select id="phx_article_page_selector"> <option value="...">)
+        if let Ok(sel) = Selector::parse("select#phx_article_page_selector option, select.pagination option") {
+            for el in document.select(&sel) {
+                if let Some(val) = el.value().attr("value") {
+                    if let Ok(resolved) = base_parsed.join(val) {
+                        candidate_urls.push(resolved);
+                    }
+                }
+            }
+        }
+
+        // 2. Pagination containers: .pagination, .page-numbers, nav.pagination, .pager
+        let pagination_selectors = [
+            ".pagination a",
+            ".page-numbers a",
+            "nav.pagination a",
+            ".pager a",
+            ".pages a",
+            "a[rel='next']",
+            "link[rel='next']",
+        ];
+
+        for sel_str in &pagination_selectors {
+            if let Ok(sel) = Selector::parse(sel_str) {
+                for el in document.select(&sel) {
+                    let href_attr = el.value().attr("href");
+                    if let Some(href) = href_attr {
+                        if let Ok(resolved) = base_parsed.join(href) {
+                            candidate_urls.push(resolved);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback heuristic: "Page 1 of X" or "Sayfa 1 / X" in text
+        let raw_text = document.root_element().text().collect::<Vec<_>>().join(" ");
+        if let Some(total_pages) = Self::detect_total_pages_from_text(&raw_text) {
+            if total_pages > 1 && total_pages <= 15 {
+                for page_num in 2..=total_pages {
+                    let clean_base = base_url.trim_end_matches('/');
+                    if clean_base.contains("/review/") || clean_base.contains("/article/") || clean_base.contains("/haber/") {
+                        let candidate_url = format!("{}/{}", clean_base, page_num);
+                        if let Ok(resolved) = url::Url::parse(&candidate_url) {
+                            candidate_urls.push(resolved);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Filter and deduplicate candidates
+        let mut final_urls: Vec<String> = Vec::new();
+        let base_normalized = {
+            let mut b = base_parsed.clone();
+            b.set_fragment(None);
+            b.to_string().trim_end_matches('/').to_string()
+        };
+
+        for u in candidate_urls {
+            let mut norm_u = u.clone();
+            norm_u.set_fragment(None);
+
+            // Same origin check
+            if norm_u.origin() != base_parsed.origin() {
+                continue;
+            }
+
+            let u_str = norm_u.to_string();
+            let u_trimmed = u_str.trim_end_matches('/').to_string();
+
+            // Ignore current base page
+            if u_trimmed == base_normalized || u_trimmed == format!("{}/1", base_normalized) {
+                continue;
+            }
+
+            // Must be related to the base path (e.g. starts with same base path prefix)
+            let base_path = base_parsed.path().trim_end_matches('/');
+            if (!norm_u.path().starts_with(base_path) && !norm_u.path().contains(base_path))
+                && norm_u.path() != base_parsed.path()
+            {
+                continue;
+            }
+
+            if !final_urls.contains(&u_str) {
+                final_urls.push(u_str);
+            }
+        }
+
+        // Cap at 10 pages maximum
+        final_urls.truncate(10);
+        final_urls
+    }
+
+    fn detect_total_pages_from_text(text: &str) -> Option<usize> {
+        let lower = text.to_lowercase();
+        let patterns = ["page 1 of ", "page 1 / ", "sayfa 1 / ", "sayfa 1 of "];
+        for pat in &patterns {
+            if let Some(pos) = lower.find(pat) {
+                let after = &lower[pos + pat.len()..];
+                let num_str: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+                if let Ok(num) = num_str.parse::<usize>() {
+                    return Some(num);
+                }
+            }
+        }
+        None
+    }
 }

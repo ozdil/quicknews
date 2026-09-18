@@ -314,14 +314,16 @@ Rectangle {
 
             Flickable {
                 id: flickable
-                contentWidth: readerCol.width
+                contentWidth: flickable.width
                 contentHeight: readerCol.implicitHeight + 60
                 boundsBehavior: Flickable.StopAtBounds
 
                 ColumnLayout {
                     id: readerCol
-                    width: Math.min(flickable.width - 24, 820)
-                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: 20
+                    anchors.rightMargin: 20
                     spacing: 16
 
                     // Article Title (Clean, Bold, Large)

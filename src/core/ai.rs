@@ -147,6 +147,24 @@ impl AiEngine {
             "goz atmak isteyebilirsiniz",
             "en çok okunanlar",
             "en cok okunanlar",
+            "next page",
+            "go to next page",
+            "previous page",
+            "sonraki sayfa",
+            "önceki sayfa",
+            "onceki sayfa",
+            "page 1 of",
+            "page 2 of",
+            "page 3 of",
+            "page 4 of",
+            "page 5 of",
+            "page 6 of",
+            "page 7 of",
+            "page 8 of",
+            "sayfa 1 /",
+            "sayfa 2 /",
+            "sayfa 3 /",
+            "sayfa 1 of",
         ];
 
         for line in lines {
@@ -156,6 +174,18 @@ impl AiEngine {
             }
 
             let lower = line_trimmed.to_lowercase();
+
+            // Skip purely pagination navigation bars (e.g. "Page: 1 2 3 4 5 6 7 8 Next Page")
+            if lower.starts_with("page:")
+                || lower.starts_with("sayfa:")
+                || lower == "next page"
+                || lower == "sonraki sayfa"
+                || lower == "previous page"
+                || lower == "önceki sayfa"
+                || lower == "onceki sayfa"
+            {
+                continue;
+            }
 
             // If related/suggested news widget starts and we already have sufficient article text, stop processing
             if (lower.starts_with("ilginizi çekebilir")
@@ -475,6 +505,52 @@ impl AiEngine {
             tags.push("Bilim".to_string());
         }
 
+        if (combined.contains("siyaset")
+            || combined.contains("politika")
+            || combined.contains("meclis")
+            || combined.contains("hükümet")
+            || combined.contains("hukumet")
+            || combined.contains("seçim")
+            || combined.contains("secim")
+            || combined.contains("bakan")
+            || combined.contains("chp")
+            || combined.contains("akp")
+            || combined.contains("parti")
+            || combined.contains("milletvekili"))
+            && !tags.iter().any(|t| t == "Siyaset")
+        {
+            tags.push("Siyaset".to_string());
+        }
+
+        if (combined.contains("gündem")
+            || combined.contains("gundem")
+            || combined.contains("son dakika")
+            || combined.contains("manşet")
+            || combined.contains("manset")
+            || combined.contains("haberler")
+            || combined.contains("asayiş")
+            || combined.contains("olay"))
+            && !tags.iter().any(|t| t == "Gündem")
+        {
+            tags.push("Gündem".to_string());
+        }
+
+        if (combined.contains("yerel")
+            || combined.contains("belediye")
+            || combined.contains("büyükşehir")
+            || combined.contains("buyuksehir")
+            || combined.contains("istanbul")
+            || combined.contains("ankara")
+            || combined.contains("izmir")
+            || combined.contains("bursa")
+            || combined.contains("antalya")
+            || combined.contains("valilik")
+            || combined.contains("muhtar"))
+            && !tags.iter().any(|t| t == "Yerel")
+        {
+            tags.push("Yerel".to_string());
+        }
+
         if tags.is_empty() {
             tags.push("Teknoloji".to_string());
         }
@@ -582,16 +658,100 @@ impl AiEngine {
         }
     }
 
-    fn resolve_curated_knowledge_base(query: &str) -> Vec<DiscoveredSource> {
+    pub fn resolve_curated_knowledge_base(query: &str) -> Vec<DiscoveredSource> {
         let mut results = Vec::new();
+        let q = query.to_lowercase();
 
-        let is_tr = query.contains("turkiye") || query.contains("türkiye") || query.contains("turk") || query.contains("türk");
-        let is_tech = query.contains("teknoloji") || query.contains("yazilim") || query.contains("yazılım") || query.contains("bilisim") || query.contains("tech");
-        let is_linux = query.contains("linux") || query.contains("acik kaynak") || query.contains("açık kaynak") || query.contains("open source");
-        let is_science = query.contains("bilim") || query.contains("uzay") || query.contains("science");
-        let is_finance = query.contains("ekonomi") || query.contains("finans") || query.contains("borsa") || query.contains("dolar");
+        let is_tr = q.contains("turkiye") || q.contains("türkiye") || q.contains("turk") || q.contains("türk");
+        let is_tech = q.contains("teknoloji") || q.contains("yazilim") || q.contains("yazılım") || q.contains("bilisim") || q.contains("tech");
+        let is_linux = q.contains("linux") || q.contains("acik kaynak") || q.contains("açık kaynak") || q.contains("open source");
+        let is_science = q.contains("bilim") || q.contains("uzay") || q.contains("science");
+        let is_finance = q.contains("ekonomi") || q.contains("finans") || q.contains("borsa") || q.contains("dolar");
+        let is_politics = q.contains("siyas") || q.contains("politika") || q.contains("meclis") || q.contains("hukumet") || q.contains("hükümet") || q.contains("parti") || q.contains("secim") || q.contains("seçim");
+        let is_local = q.contains("yerel") || q.contains("ankara") || q.contains("istanbul") || q.contains("izmir") || q.contains("bursa") || q.contains("antalya") || q.contains("sehir") || q.contains("şehir") || q.contains("belediye");
+        let is_general = q.contains("gundem") || q.contains("gündem") || q.contains("genel") || q.contains("haber") || q.contains("manset") || q.contains("manşet") || q.contains("gazete") || q.contains("ajans") || q.contains("son dakika");
 
-        if is_tr && is_tech {
+        if is_local {
+            results.push(DiscoveredSource {
+                name: "Istanbul Bulteni".to_string(),
+                domain: "ibb.istanbul".to_string(),
+                suggested_feed: Some("https://www.ibb.istanbul/rss".to_string()),
+                category: "Yerel".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "IHA Yerel".to_string(),
+                domain: "iha.com.tr".to_string(),
+                suggested_feed: Some("https://www.iha.com.tr/rss".to_string()),
+                category: "Yerel".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "Bursa Hakimiyet".to_string(),
+                domain: "bursahakimiyet.com.tr".to_string(),
+                suggested_feed: Some("https://www.bursahakimiyet.com.tr/rss".to_string()),
+                category: "Yerel".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "Ege Telgraf".to_string(),
+                domain: "egetelgraf.com".to_string(),
+                suggested_feed: Some("https://www.egetelgraf.com/rss".to_string()),
+                category: "Yerel".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "Baskent Gazetesi".to_string(),
+                domain: "baskentgazete.com.tr".to_string(),
+                suggested_feed: Some("https://www.baskentgazete.com.tr/rss".to_string()),
+                category: "Yerel".to_string(),
+            });
+        } else if is_politics || is_general {
+            results.push(DiscoveredSource {
+                name: "Sozcu".to_string(),
+                domain: "sozcu.com.tr".to_string(),
+                suggested_feed: Some("https://www.sozcu.com.tr/feeds-son-dakika".to_string()),
+                category: "Gundem".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "Haberturk".to_string(),
+                domain: "haberturk.com".to_string(),
+                suggested_feed: Some("https://www.haberturk.com/rss".to_string()),
+                category: "Gundem".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "NTV Gundem".to_string(),
+                domain: "ntv.com.tr".to_string(),
+                suggested_feed: Some("https://www.ntv.com.tr/gundem.rss".to_string()),
+                category: "Gundem".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "BBC Turkce".to_string(),
+                domain: "bbc.com".to_string(),
+                suggested_feed: Some("https://feeds.bbci.co.uk/turkce/rss.xml".to_string()),
+                category: "Siyaset".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "T24".to_string(),
+                domain: "t24.com.tr".to_string(),
+                suggested_feed: Some("https://t24.com.tr/rss".to_string()),
+                category: "Siyaset".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "Gazete Duvar".to_string(),
+                domain: "gazeteduvar.com.tr".to_string(),
+                suggested_feed: Some("https://www.gazeteduvar.com.tr/export/rss".to_string()),
+                category: "Siyaset".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "Anadolu Ajansi".to_string(),
+                domain: "aa.com.tr".to_string(),
+                suggested_feed: Some("https://www.aa.com.tr/tr/rss/default?cat=guncel".to_string()),
+                category: "Gundem".to_string(),
+            });
+            results.push(DiscoveredSource {
+                name: "Cumhuriyet".to_string(),
+                domain: "cumhuriyet.com.tr".to_string(),
+                suggested_feed: Some("https://www.cumhuriyet.com.tr/rss".to_string()),
+                category: "Siyaset".to_string(),
+            });
+        } else if is_tr && is_tech {
             results.push(DiscoveredSource {
                 name: "Webrazzi".to_string(),
                 domain: "webrazzi.com".to_string(),
@@ -767,7 +927,7 @@ impl AiEngine {
     async fn query_gemini_for_sources(prompt: &str, api_key: &str) -> Result<Vec<DiscoveredSource>, String> {
         let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
-        let system_instruction = "Sen bir haber kaynagi kesif motorusun. Kullanicinin dogal dil istegini analiz et ve en yuksek kaliteli haber sitelerinin adini, alan adini, RSS akisini (varsa) ve kategorisini dondur. Sadece gecerli bir JSON dizisi dondur: [{\"name\":\"...\",\"domain\":\"...\",\"suggested_feed\":\"...\",\"category\":\"...\"}]";
+        let system_instruction = "Sen bir haber kaynagi kesif motorusun. Kullanicinin teknoloji, siyaset, gundem, yerel, ekonomi veya bilim isteklerini analiz et. Belirtilen alanla ilgili en yuksek kaliteli haber sitelerinin adini, alan adini, RSS akisini (varsa) ve kategorisini (orn: Gundem, Siyaset, Yerel, Teknoloji, Bilim, Ekonomi) dondur. Sadece gecerli bir JSON dizisi dondur: [{\"name\":\"...\",\"domain\":\"...\",\"suggested_feed\":\"...\",\"category\":\"...\"}]";
 
         let payload = serde_json::json!({
             "contents": [{
@@ -866,7 +1026,7 @@ impl AiEngine {
         let url = "http://127.0.0.1:11434/api/generate";
         let body = serde_json::json!({
             "model": "llama3",
-            "prompt": format!("As a news source engine, return ONLY a JSON array of sources for: '{}'. Format: [{{\"name\":\"...\",\"domain\":\"...\",\"suggested_feed\":\"...\",\"category\":\"...\"}}]", prompt),
+            "prompt": format!("As a news source discovery engine, return ONLY a JSON array of top news/media sources for topic/country/city: '{}'. Categories can be: 'Gundem', 'Siyaset', 'Yerel', 'Teknoloji', 'Bilim', 'Ekonomi'. Format: [{{\"name\":\"...\",\"domain\":\"...\",\"suggested_feed\":\"...\",\"category\":\"...\"}}]", prompt),
             "stream": false,
             "format": "json"
         });
@@ -931,7 +1091,7 @@ impl AiEngine {
     ) -> Result<String, String> {
         let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
-        let system_instruction = "Sen bir saf metin haber editorusun. Asagidaki ham metni bastan sona eksiksiz, kelime kelime koruyarak duzenle. Haberi ASLA kisaltma, ozetleme ya da kesme; tum gercek haberi eksiksiz aktar. Sayfada kalan site ici duyurulari, 'bizi takip edin' benzeri sosyal medya cagrilari, yazar biyografileri, cerez/abonelik metinleri, reklam kalintilari ve 'ilgili haberler' bolumlerini tamamen cikar. Paragraflari iki satir boslukla net ayir. Varsa maddeli listeleri ('- madde') ve numarali listeleri ('1. madde') liste hiyerarsisiyle aktar. Varsa alt basliklari '## Baslik' formatinda koru. KESINLIKLE HICBIR UNICODE EMOJI KULLANMA. Yalnizca temizlenmis metni dondur.";
+        let system_instruction = "Sen bir saf metin haber editorusun. Cok sayfali veya tek sayfali makale metinlerini bastan sona eksiksiz, kelime kelime koruyarak duzenle. Sayfa gecislerinde kalan 'Page 1 of 8', 'Next Page', 'Sonraki Sayfa' gibi sayfalama kalintilarini, reklam ve sosyal medya duyurularini tamamen temizle. Paragraflari iki satir boslukla net ayir. Varsa maddeli listeleri ('- madde') ve numarali listeleri ('1. madde') liste hiyerarsisiyle aktar. Varsa alt basliklari '## Baslik' formatinda koru. Haberi ASLA kisaltma, ozetleme ya da kesme; tum gercek haberi eksiksiz aktar. KESINLIKLE HICBIR UNICODE EMOJI KULLANMA. Yalnizca temizlenmis metni dondur.";
 
         let truncated_text = safe_truncate_str(raw_text, 24000);
         let payload = serde_json::json!({
@@ -969,7 +1129,7 @@ impl AiEngine {
         let truncated_text = safe_truncate_str(raw_text, 6000);
         let body = serde_json::json!({
             "model": "llama3",
-            "prompt": format!("Format this full news article cleanly with paragraphs and lists. DO NOT summarize or shorten. Preserve all information. Remove ads, cookie notices, and site clutter. Never use emojis.\n\nTitle: {}\nText:\n{}", title, truncated_text),
+            "prompt": format!("Format this full news article cleanly with paragraphs, subheadings, and lists. Clean any multi-page pagination remnants like 'Page 1 of 8' or 'Next Page'. DO NOT summarize or shorten. Preserve all information. Remove ads, cookie notices, and site clutter. Never use emojis.\n\nTitle: {}\nText:\n{}", title, truncated_text),
             "stream": false
         });
 

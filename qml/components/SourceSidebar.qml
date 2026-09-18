@@ -39,6 +39,15 @@ Rectangle {
         var sName = norm(source.name || "");
         var sDomain = norm(source.domain || "");
 
+        if (c === "gundem") {
+            return sCat.indexOf("gundem") !== -1 || sCat.indexOf("genel") !== -1 || sCat.indexOf("ajans") !== -1;
+        }
+        if (c === "siyaset") {
+            return sCat.indexOf("siyaset") !== -1 || sCat.indexOf("politika") !== -1 || sCat.indexOf("meclis") !== -1;
+        }
+        if (c === "yerel") {
+            return sCat.indexOf("yerel") !== -1 || sCat.indexOf("sehir") !== -1 || sCat.indexOf("belediye") !== -1;
+        }
         if (c === "linux") {
             return sCat.indexOf("linux") !== -1 || sName.indexOf("linux") !== -1 || sDomain.indexOf("phoronix") !== -1;
         }
@@ -183,7 +192,7 @@ Rectangle {
             spacing: 6
 
             Repeater {
-                model: ["Tümü", "Teknoloji", "Linux", "Donanım", "Bilim", "Girişimcilik"]
+                model: ["Tümü", "Gündem", "Siyaset", "Yerel", "Teknoloji", "Linux", "Donanım", "Bilim", "Girişimcilik"]
 
                 Rectangle {
                     width: catText.implicitWidth + 16

@@ -430,3 +430,83 @@ fn test_symlink_prune_cache_guard() {
     let _ = std::fs::remove_dir_all(&temp_cache);
 }
 
+#[test]
+fn test_pagination_detection_phoronix_and_generic() {
+    let sample_html = r#"
+        <!DOCTYPE html>
+        <html>
+        <body>
+            <article>
+                <h1>Ubuntu 26.10 amd64v3 Can Provide A Nice Boost</h1>
+                <div class="author">Written by Michael Larabel. <strong>Page 1 of 4</strong>.</div>
+                <p>Birinci sayfa metni burada yer aliyor ve performans farklarini inceliyor.</p>
+                <div class="pagination">
+                    Page: <span> 1 </span>
+                    <a href="/review/ubuntu-2610/2"> 2 </a>
+                    <a href="/review/ubuntu-2610/3"> 3 </a>
+                    <a href="/review/ubuntu-2610/4"> 4 </a>
+                    <a href="/review/ubuntu-2610/2" title="Go To Next Page">Next Page</a>
+                    <a href="https://external-malicious.com/hack">Dis Baglanti</a>
+                </div>
+            </article>
+        </body>
+        </html>
+    "#;
+
+    let base_url = "https://www.phoronix.com/review/ubuntu-2610";
+    let detected = ArticleExtractor::detect_pagination_urls(sample_html, base_url);
+
+    // Should detect page 2, 3, 4 and strictly reject external malicious URL and duplicate page 2
+    assert_eq!(detected.len(), 3);
+    assert_eq!(detected[0], "https://www.phoronix.com/review/ubuntu-2610/2");
+    assert_eq!(detected[1], "https://www.phoronix.com/review/ubuntu-2610/3");
+    assert_eq!(detected[2], "https://www.phoronix.com/review/ubuntu-2610/4");
+    assert!(!detected.iter().any(|u| u.contains("external-malicious.com")));
+}
+
+#[test]
+fn test_multi_page_concatenation_and_clutter_stripping() {
+    let raw_stitched = r#"
+        Canonical recently began producing Ubuntu 26.10 amd64v3 daily ISOs.
+        Page 1 of 4 . 32 Comments .
+        Page: 1 2 3 4 Next Page
+
+        ## Sayfa 2
+
+        With many of the past amd64v3 benchmarks on Phoronix it has been tested.
+        Next Page
+        Sonraki Sayfa
+    "#;
+
+    let structured = AiEngine::clean_blocks(raw_stitched);
+    assert!(!structured.contains("Page: 1 2 3 4 Next Page"));
+    assert!(!structured.contains("Sonraki Sayfa"));
+    assert!(structured.contains("Canonical recently began producing"));
+    assert!(structured.contains("## Sayfa 2"));
+    assert!(structured.contains("With many of the past amd64v3 benchmarks"));
+}
+
+#[test]
+fn test_ai_political_and_local_sources_discovery() {
+    // Political news discovery
+    let pol_sources = AiEngine::resolve_curated_knowledge_base("siyasi haber sitelerini ekle");
+    assert!(pol_sources.iter().any(|s| s.name == "Sozcu"));
+    assert!(pol_sources.iter().any(|s| s.name == "Haberturk"));
+    assert!(pol_sources.iter().any(|s| s.name == "BBC Turkce"));
+    assert!(pol_sources.iter().any(|s| s.category == "Siyaset" || s.category == "Gundem"));
+
+    // Local news discovery
+    let local_sources = AiEngine::resolve_curated_knowledge_base("istanbul ve ankara yerel haber siteleri");
+    assert!(local_sources.iter().any(|s| s.name == "Istanbul Bulteni"));
+    assert!(local_sources.iter().any(|s| s.name == "Baskent Gazetesi"));
+    assert!(local_sources.iter().all(|s| s.category == "Yerel"));
+
+    // Tag auto classification for politics and local
+    let tags_pol = AiEngine::auto_classify_tags("Sozcu", "Gundem", "Mecliste yeni yasa teklifi gorusuldu", "Hukumet ve muhalefet partileri arasinda tartisma yasandi.");
+    assert!(tags_pol.contains(&"Siyaset".to_string()) || tags_pol.contains(&"Gundem".to_string()));
+
+    let tags_local = AiEngine::auto_classify_tags("Bursa Hakimiyet", "Yerel", "Buyuksehir belediyesi yeni metro hattini duyurdu", "Istanbul ve Bursa ulasim projeleri.");
+    assert!(tags_local.contains(&"Yerel".to_string()));
+}
+
+
