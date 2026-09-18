@@ -209,6 +209,11 @@ pub fn validate_url_ssrf_and_resolve(raw_url: &str) -> Result<(Url, Vec<std::net
         return Err(SecurityError::InvalidPort(port));
     }
 
+    // Reject userinfo (username/password) to prevent URL spoofing, credential leakage and SSRF bypass
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(SecurityError::InvalidHost("URL kullanici bilgisi (userinfo) iceremez".to_string()));
+    }
+
     let host_str = match parsed.host_str() {
         Some(h) if !h.trim().is_empty() => h.to_lowercase(),
         _ => return Err(SecurityError::InvalidHost("Bos ana bilgisayar".to_string())),
@@ -327,6 +332,26 @@ pub async fn fetch_bounded_content(
         )));
     }
 
+    // MIME type check: Reject non-text/binary payloads early (audio, video, archives, executables)
+    if let Some(content_type_header) = response.headers().get(reqwest::header::CONTENT_TYPE) {
+        if let Ok(ct) = content_type_header.to_str() {
+            let ct_low = ct.to_lowercase();
+            let forbidden_mime_substrings = [
+                "image/", "video/", "audio/", "application/zip", "application/x-zip",
+                "application/octet-stream", "application/pdf", "application/x-tar",
+                "application/x-executable", "application/x-dosexec", "application/vnd."
+            ];
+            for forbidden in &forbidden_mime_substrings {
+                if ct_low.contains(forbidden) {
+                    return Err(SecurityError::Network(format!(
+                        "Desteklenmeyen veya guvensiz icerik turu: {}",
+                        ct
+                    )));
+                }
+            }
+        }
+    }
+
     let mut body_bytes = Vec::new();
     while let Some(chunk) = response
         .chunk()
@@ -349,9 +374,8 @@ pub fn atomic_write_file(path: &Path, data: &[u8]) -> Result<(), SecurityError> 
         .parent()
         .unwrap_or_else(|| Path::new("."));
 
-    // Check parent directory metadata
-    if parent.exists() {
-        let parent_meta = fs::symlink_metadata(parent)?;
+    // Check parent directory metadata (including broken symlinks)
+    if let Ok(parent_meta) = fs::symlink_metadata(parent) {
         if parent_meta.file_type().is_symlink() {
             return Err(SecurityError::SymlinkForbidden(parent.to_path_buf()));
         }
@@ -362,9 +386,8 @@ pub fn atomic_write_file(path: &Path, data: &[u8]) -> Result<(), SecurityError> 
         fs::set_permissions(parent, perms)?;
     }
 
-    // Check target file if exists
-    if path.exists() {
-        let meta = fs::symlink_metadata(path)?;
+    // Check target file if exists (including broken symlinks!)
+    if let Ok(meta) = fs::symlink_metadata(path) {
         if meta.file_type().is_symlink() {
             return Err(SecurityError::SymlinkForbidden(path.to_path_buf()));
         }
@@ -412,7 +435,12 @@ pub fn atomic_write_file(path: &Path, data: &[u8]) -> Result<(), SecurityError> 
 /// Safely reads file content with strict symlink check and bounded size.
 /// Uses O_NOFOLLOW to avoid symlink TOCTOU race conditions.
 pub fn safe_read_file(path: &Path, max_bytes: usize) -> Result<Vec<u8>, SecurityError> {
-    if !path.exists() {
+    // Check symlink presence before opening (including broken symlinks)
+    if let Ok(meta) = fs::symlink_metadata(path) {
+        if meta.file_type().is_symlink() {
+            return Err(SecurityError::SymlinkForbidden(path.to_path_buf()));
+        }
+    } else {
         return Err(SecurityError::Io(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "Dosya bulunamadi",

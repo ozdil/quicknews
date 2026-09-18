@@ -86,30 +86,30 @@ Rectangle {
         root.readBuffer = "";
 
         // Mark as read in engine
-        markReadProc.command = [root.engineBin, "mark-read", article.id];
+        markReadProc.command = [root.engineBin, "mark-read", "--", article.id];
         markReadProc.running = true;
 
         // Read clean text
-        readProc.command = [root.engineBin, "read", article.link, "--json"];
+        readProc.command = [root.engineBin, "read", "--", article.link, "--json"];
         readProc.running = true;
     }
 
     function toggleSaveArticle(idOrLink) {
         if (!idOrLink) return;
-        toggleSaveProc.command = [root.engineBin, "toggle-save", idOrLink];
+        toggleSaveProc.command = [root.engineBin, "toggle-save", "--", idOrLink];
         toggleSaveProc.running = true;
     }
 
     function exportArticle(url) {
         if (!url) return;
-        exportProc.command = [root.engineBin, "export", url, "--json"];
+        exportProc.command = [root.engineBin, "export", "--", url, "--json"];
         exportProc.running = true;
     }
 
     function requestAiSummary(url) {
         root.isLoadingAi = true;
         root.summaryBuffer = "";
-        summaryProc.command = [root.engineBin, "summarize", url, "--json"];
+        summaryProc.command = [root.engineBin, "summarize", "--", url, "--json"];
         summaryProc.running = true;
     }
 
@@ -117,7 +117,7 @@ Rectangle {
         root.isAddingPrompt = true;
         root.promptBuffer = "";
         root.promptStatus = "Yapay zeka kaynaklari analiz ediyor ve RSS akislarini dogruluyor...";
-        addPromptProc.command = [root.engineBin, "add-prompt", promptText, "--json"];
+        addPromptProc.command = [root.engineBin, "add-prompt", "--", promptText, "--json"];
         addPromptProc.running = true;
     }
 
@@ -260,7 +260,11 @@ Rectangle {
                 root.requestAiSummary(url);
             }
             onOpenExternalRequested: function(url) {
-                Qt.openUrlExternally(url);
+                if (!url) return;
+                var u = String(url).trim().toLowerCase();
+                if (u.indexOf("http://") === 0 || u.indexOf("https://") === 0) {
+                    Qt.openUrlExternally(url);
+                }
             }
             onToggleSaveRequested: function(url) {
                 root.toggleSaveArticle(url);

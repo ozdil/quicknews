@@ -1,6 +1,6 @@
 use crate::core::extractor::CleanArticle;
 use crate::core::feed::FeedItem;
-use crate::core::security::{atomic_write_file, safe_read_file, SecurityError, MAX_LOCAL_FILE_SIZE};
+use crate::core::security::{atomic_write_file, safe_read_file, validate_url_ssrf, SecurityError, MAX_LOCAL_FILE_SIZE};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -94,6 +94,23 @@ impl StorageManager {
         feed_url: &str,
         category: &str,
     ) -> Result<bool, SecurityError> {
+        // Validate feed URL against SSRF and bad schemes
+        validate_url_ssrf(feed_url)?;
+
+        let n = name.trim();
+        let d = domain.trim();
+        let c = category.trim();
+
+        if n.is_empty() || d.is_empty() || c.is_empty() {
+            return Err(SecurityError::InvalidHost("Kaynak parametreleri bos olamaz".to_string()));
+        }
+        if n.len() > 100 || d.len() > 100 || c.len() > 100 {
+            return Err(SecurityError::InvalidHost("Kaynak parametreleri 100 karakteri asamaz".to_string()));
+        }
+        if n.contains('\n') || d.contains('\n') || c.contains('\n') || n.contains('\r') || d.contains('\r') || c.contains('\r') {
+            return Err(SecurityError::InvalidHost("Kaynak parametreleri yeni satir iceremez".to_string()));
+        }
+
         let mut sources = self.load_sources().unwrap_or_default();
 
         // Prevent duplicates by feed_url or domain
@@ -174,7 +191,33 @@ impl StorageManager {
         let p = self.content_cache_path(url);
         let json = serde_json::to_vec_pretty(article)
             .map_err(|e| SecurityError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))?;
-        atomic_write_file(&p, &json)
+        atomic_write_file(&p, &json)?;
+        // Disk exhaustion guard: keep cache bounded to at most 200 items
+        self.prune_content_cache(200);
+        Ok(())
+    }
+
+    /// Prunes oldest cache files when total cache file count exceeds max_files.
+    pub fn prune_content_cache(&self, max_files: usize) {
+        let cache_dir = self.data_dir.join("content_cache");
+        if let Ok(entries) = std::fs::read_dir(&cache_dir) {
+            let mut files = Vec::new();
+            for entry in entries.flatten() {
+                if let Ok(meta) = entry.metadata() {
+                    if meta.is_file() {
+                        let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                        files.push((entry.path(), mtime));
+                    }
+                }
+            }
+            if files.len() > max_files {
+                files.sort_by_key(|f| f.1);
+                let to_remove = files.len() - max_files;
+                for (path, _) in files.into_iter().take(to_remove) {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
     }
 
     pub fn load_saved(&self) -> Vec<FeedItem> {

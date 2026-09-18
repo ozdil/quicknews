@@ -765,10 +765,7 @@ impl AiEngine {
     }
 
     async fn query_gemini_for_sources(prompt: &str, api_key: &str) -> Result<Vec<DiscoveredSource>, String> {
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}",
-            api_key
-        );
+        let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
         let system_instruction = "Sen bir haber kaynagi kesif motorusun. Kullanicinin dogal dil istegini analiz et ve en yuksek kaliteli haber sitelerinin adini, alan adini, RSS akisini (varsa) ve kategorisini dondur. Sadece gecerli bir JSON dizisi dondur: [{\"name\":\"...\",\"domain\":\"...\",\"suggested_feed\":\"...\",\"category\":\"...\"}]";
 
@@ -783,9 +780,15 @@ impl AiEngine {
             }
         });
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(12))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| e.to_string())?;
+
         let res = client
-            .post(&url)
+            .post(url)
+            .header("x-goog-api-key", api_key.trim())
             .json(&payload)
             .send()
             .await
@@ -806,10 +809,7 @@ impl AiEngine {
         content: &str,
         api_key: &str,
     ) -> Result<AiSummaryResult, String> {
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}",
-            api_key
-        );
+        let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
         let truncated_content = safe_truncate_str(content, 6000);
         let prompt = format!(
@@ -827,9 +827,15 @@ impl AiEngine {
             }
         });
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(12))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| e.to_string())?;
+
         let res = client
-            .post(&url)
+            .post(url)
+            .header("x-goog-api-key", api_key.trim())
             .json(&payload)
             .send()
             .await
@@ -867,6 +873,7 @@ impl AiEngine {
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(3))
+            .connect_timeout(std::time::Duration::from_millis(800))
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -892,6 +899,7 @@ impl AiEngine {
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(4))
+            .connect_timeout(std::time::Duration::from_millis(800))
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -921,10 +929,7 @@ impl AiEngine {
         raw_text: &str,
         api_key: &str,
     ) -> Result<String, String> {
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}",
-            api_key
-        );
+        let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
         let system_instruction = "Sen bir saf metin haber editorusun. Asagidaki ham metni bastan sona eksiksiz, kelime kelime koruyarak duzenle. Haberi ASLA kisaltma, ozetleme ya da kesme; tum gercek haberi eksiksiz aktar. Sayfada kalan site ici duyurulari, 'bizi takip edin' benzeri sosyal medya cagrilari, yazar biyografileri, cerez/abonelik metinleri, reklam kalintilari ve 'ilgili haberler' bolumlerini tamamen cikar. Paragraflari iki satir boslukla net ayir. Varsa maddeli listeleri ('- madde') ve numarali listeleri ('1. madde') liste hiyerarsisiyle aktar. Varsa alt basliklari '## Baslik' formatinda koru. KESINLIKLE HICBIR UNICODE EMOJI KULLANMA. Yalnizca temizlenmis metni dondur.";
 
@@ -937,9 +942,15 @@ impl AiEngine {
             }]
         });
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(18))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| e.to_string())?;
+
         let res = client
-            .post(&url)
+            .post(url)
+            .header("x-goog-api-key", api_key.trim())
             .json(&payload)
             .send()
             .await
@@ -964,6 +975,7 @@ impl AiEngine {
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(12))
+            .connect_timeout(std::time::Duration::from_millis(800))
             .build()
             .map_err(|e| e.to_string())?;
 

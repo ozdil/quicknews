@@ -155,20 +155,25 @@ impl ArticleExtractor {
         let mut paragraphs = Vec::new();
 
         if let Some(root_el) = article_element {
-            Self::collect_clean_blocks(&root_el, &mut paragraphs);
+            Self::collect_clean_blocks(&root_el, &mut paragraphs, 0);
         } else if let Ok(body_sel) = Selector::parse("body") {
             if let Some(body_el) = document.select(&body_sel).next() {
-                Self::collect_clean_blocks(&body_el, &mut paragraphs);
+                Self::collect_clean_blocks(&body_el, &mut paragraphs, 0);
             }
         }
 
-        // Deduplicate and filter out trivial short lines
+        // Deduplicate and filter out trivial short lines, cap total blocks and size
         let mut final_blocks = Vec::new();
+        let mut total_chars: usize = 0;
         for p in paragraphs {
+            if final_blocks.len() >= 300 || total_chars >= 150_000 {
+                break;
+            }
             let trimmed = p.trim();
             if trimmed.len() >= 25 {
                 // Ensure no duplicates
                 if !final_blocks.contains(&trimmed.to_string()) {
+                    total_chars += trimmed.len();
                     final_blocks.push(trimmed.to_string());
                 }
             }
@@ -181,7 +186,13 @@ impl ArticleExtractor {
         }
     }
 
-    fn collect_clean_blocks(element: &scraper::ElementRef, out: &mut Vec<String>) {
+    fn collect_clean_blocks(element: &scraper::ElementRef, out: &mut Vec<String>, depth: usize) {
+        const MAX_DOM_DEPTH: usize = 32;
+        const MAX_BLOCKS_LIMIT: usize = 500;
+        if depth > MAX_DOM_DEPTH || out.len() >= MAX_BLOCKS_LIMIT {
+            return;
+        }
+
         let tag_name = element.value().name();
 
         // Strictly reject forbidden tags (scripts, ads, images, etc.)
@@ -278,7 +289,7 @@ impl ArticleExtractor {
                         out.push(cleaned);
                         current_inline.clear();
                     }
-                    Self::collect_clean_blocks(&child_el, out);
+                    Self::collect_clean_blocks(&child_el, out, depth + 1);
                 }
             }
         }

@@ -172,14 +172,18 @@ impl FeedParser {
                     if in_item || in_entry {
                         let text = e.unescape().unwrap_or_default().to_string();
                         match current_tag.as_str() {
-                            "title" => cur_title.push_str(&text),
-                            "link" => {
-                                if cur_link.is_empty() {
-                                    cur_link.push_str(&text);
-                                }
+                            "title" if cur_title.len() < 500 => {
+                                cur_title.push_str(&text);
                             }
-                            "description" | "summary" | "content" => cur_desc.push_str(&text),
-                            "pubdate" | "published" | "updated" | "dc:date" => cur_date.push_str(&text),
+                            "link" if cur_link.len() < 2048 => {
+                                cur_link.push_str(&text);
+                            }
+                            "description" | "summary" | "content" if cur_desc.len() < 64 * 1024 => {
+                                cur_desc.push_str(&text);
+                            }
+                            "pubdate" | "published" | "updated" | "dc:date" if cur_date.len() < 128 => {
+                                cur_date.push_str(&text);
+                            }
                             _ => {}
                         }
                     }
@@ -188,14 +192,18 @@ impl FeedParser {
                     if in_item || in_entry {
                         let text = String::from_utf8_lossy(e.as_ref()).to_string();
                         match current_tag.as_str() {
-                            "title" => cur_title.push_str(&text),
-                            "link" => {
-                                if cur_link.is_empty() {
-                                    cur_link.push_str(&text);
-                                }
+                            "title" if cur_title.len() < 500 => {
+                                cur_title.push_str(&text);
                             }
-                            "description" | "summary" | "content" => cur_desc.push_str(&text),
-                            "pubdate" | "published" | "updated" | "dc:date" => cur_date.push_str(&text),
+                            "link" if cur_link.len() < 2048 => {
+                                cur_link.push_str(&text);
+                            }
+                            "description" | "summary" | "content" if cur_desc.len() < 64 * 1024 => {
+                                cur_desc.push_str(&text);
+                            }
+                            "pubdate" | "published" | "updated" | "dc:date" if cur_date.len() < 128 => {
+                                cur_date.push_str(&text);
+                            }
                             _ => {}
                         }
                     }
@@ -264,6 +272,11 @@ impl FeedParser {
                                 is_read: false,
                                 reading_time_mins: reading_time,
                             });
+
+                            // Flooding DoS guard: limit items per single feed to 100
+                            if items.len() >= 100 {
+                                break;
+                            }
                         }
                     }
                     current_tag.clear();

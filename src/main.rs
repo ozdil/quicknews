@@ -45,11 +45,13 @@ async fn main() {
             }
         }
         "read" => {
-            if args.len() < 3 {
-                eprintln!("Kullanim: quicknews-engine read <URL> [--json]");
-                std::process::exit(1);
-            }
-            let url = &args[2];
+            let url = match find_positional_arg(&args, 2) {
+                Some(u) => u,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine read [--] <URL> [--json]");
+                    std::process::exit(1);
+                }
+            };
             let is_json = args.iter().any(|a| a == "--json");
 
             match app.read_clean_article(url).await {
@@ -82,11 +84,13 @@ async fn main() {
             }
         }
         "summarize" => {
-            if args.len() < 3 {
-                eprintln!("Kullanim: quicknews-engine summarize <URL> [--json]");
-                std::process::exit(1);
-            }
-            let url = &args[2];
+            let url = match find_positional_arg(&args, 2) {
+                Some(u) => u,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine summarize [--] <URL> [--json]");
+                    std::process::exit(1);
+                }
+            };
             let is_json = args.iter().any(|a| a == "--json");
 
             match app.read_clean_article(url).await {
@@ -126,11 +130,13 @@ async fn main() {
             }
         }
         "add-prompt" => {
-            if args.len() < 3 {
-                eprintln!("Kullanim: quicknews-engine add-prompt \"<Dogal dil arama metni>\" [--json]");
-                std::process::exit(1);
-            }
-            let prompt = &args[2];
+            let prompt = match find_positional_arg(&args, 2) {
+                Some(p) => p,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine add-prompt [--] \"<Dogal dil arama metni>\" [--json]");
+                    std::process::exit(1);
+                }
+            };
             let is_json = args.iter().any(|a| a == "--json");
 
             if !is_json {
@@ -154,43 +160,52 @@ async fn main() {
             }
         }
         "add-source" => {
-            if args.len() < 6 {
+            let filtered: Vec<&str> = args.iter().skip(2).filter(|a| *a != "--").map(|s| s.as_str()).collect();
+            if filtered.len() < 4 {
                 eprintln!("Kullanim: quicknews-engine add-source <Isim> <Domain> <FeedURL> <Kategori>");
                 std::process::exit(1);
             }
-            match app.storage.add_source(&args[2], &args[3], &args[4], &args[5]) {
+            match app.storage.add_source(filtered[0], filtered[1], filtered[2], filtered[3]) {
                 Ok(true) => println!("Kaynak basariyla eklendi."),
                 Ok(false) => println!("Bu kaynak zaten mevcut."),
                 Err(e) => eprintln!("Kaynak ekleme hatasi: {}", e),
             }
         }
         "remove-source" => {
-            if args.len() < 3 {
-                eprintln!("Kullanim: quicknews-engine remove-source <ID veya Domain>");
-                std::process::exit(1);
-            }
-            match app.storage.remove_source(&args[2]) {
+            let target = match find_positional_arg(&args, 2) {
+                Some(t) => t,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine remove-source [--] <ID veya Domain>");
+                    std::process::exit(1);
+                }
+            };
+            match app.storage.remove_source(target) {
                 Ok(true) => println!("Kaynak silindi."),
                 Ok(false) => println!("Kaynak bulunamadi."),
                 Err(e) => eprintln!("Silme hatasi: {}", e),
             }
         }
         "mark-read" => {
-            if args.len() < 3 {
-                eprintln!("Kullanim: quicknews-engine mark-read <HaberID>");
-                std::process::exit(1);
-            }
-            let _ = app.storage.mark_article_read(&args[2]);
+            let target = match find_positional_arg(&args, 2) {
+                Some(t) => t,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine mark-read [--] <HaberID>");
+                    std::process::exit(1);
+                }
+            };
+            let _ = app.storage.mark_article_read(target);
             println!("OK");
         }
         "save" => {
-            if args.len() < 3 {
-                eprintln!("Kullanim: quicknews-engine save <HaberID veya Link>");
-                std::process::exit(1);
-            }
-            let target = &args[2];
+            let target = match find_positional_arg(&args, 2) {
+                Some(t) => t,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine save [--] <HaberID veya Link>");
+                    std::process::exit(1);
+                }
+            };
             let articles = app.storage.load_articles();
-            if let Some(item) = articles.iter().find(|a| a.id == *target || a.link == *target) {
+            if let Some(item) = articles.iter().find(|a| a.id == target || a.link == target) {
                 let _ = app.storage.save_article_bookmark(item);
                 println!("OK");
             } else {
@@ -198,19 +213,25 @@ async fn main() {
             }
         }
         "unsave" => {
-            if args.len() < 3 {
-                eprintln!("Kullanim: quicknews-engine unsave <HaberID veya Link>");
-                std::process::exit(1);
-            }
-            let _ = app.storage.remove_saved_article(&args[2]);
+            let target = match find_positional_arg(&args, 2) {
+                Some(t) => t,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine unsave [--] <HaberID veya Link>");
+                    std::process::exit(1);
+                }
+            };
+            let _ = app.storage.remove_saved_article(target);
             println!("OK");
         }
         "toggle-save" => {
-            if args.len() < 3 {
-                eprintln!("Kullanim: quicknews-engine toggle-save <HaberID veya Link>");
-                std::process::exit(1);
-            }
-            let (is_saved, ok) = app.toggle_save_article(&args[2]);
+            let target = match find_positional_arg(&args, 2) {
+                Some(t) => t,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine toggle-save [--] <HaberID veya Link>");
+                    std::process::exit(1);
+                }
+            };
+            let (is_saved, ok) = app.toggle_save_article(target);
             let res = serde_json::json!({
                 "saved": is_saved,
                 "success": ok
@@ -230,11 +251,13 @@ async fn main() {
             }
         }
         "export" => {
-            if args.len() < 3 {
-                eprintln!("Kullanim: quicknews-engine export <URL> [--out <DosyaYolu>]");
-                std::process::exit(1);
-            }
-            let url = &args[2];
+            let url = match find_positional_arg(&args, 2) {
+                Some(u) => u,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine export [--] <URL> [--out <DosyaYolu>]");
+                    std::process::exit(1);
+                }
+            };
             let out_idx = args.iter().position(|a| a == "--out").map(|i| i + 1);
             let target_path = if let Some(idx) = out_idx {
                 if idx < args.len() {
@@ -289,4 +312,27 @@ fn print_usage() {
     println!("  remove-source <id>    Haber kaynagini kaldirir");
     println!("  mark-read <id>        Haberi okundu olarak isaretler");
     println!("  status                Uygulama durumunu JSON formatinda dondurur");
+}
+
+fn find_positional_arg(args: &[String], skip: usize) -> Option<&str> {
+    let mut i = skip;
+    while i < args.len() {
+        let a = &args[i];
+        if a == "--" {
+            if i + 1 < args.len() {
+                return Some(&args[i + 1]);
+            }
+            return None;
+        }
+        if a == "--out" {
+            i += 2;
+            continue;
+        }
+        if a == "--json" {
+            i += 1;
+            continue;
+        }
+        return Some(a.as_str());
+    }
+    None
 }

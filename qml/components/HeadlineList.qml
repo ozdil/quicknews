@@ -384,6 +384,7 @@ Rectangle {
                         // Headline Title (Pure Typography)
                         Text {
                             text: modelData.title
+                            textFormat: Text.PlainText
                             font.family: Theme.fontFamily
                             font.pixelSize: 13
                             font.bold: !modelData.is_read
@@ -398,6 +399,7 @@ Rectangle {
                         Text {
                             visible: modelData.summary && modelData.summary.length > 0
                             text: modelData.summary
+                            textFormat: Text.PlainText
                             font.family: Theme.fontFamily
                             font.pixelSize: 11
                             color: Theme.textDim

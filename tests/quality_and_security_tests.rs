@@ -312,3 +312,82 @@ fn test_symlink_nofollow_rejection() {
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
+
+#[test]
+fn test_broken_symlink_rejection() {
+    let temp_dir = std::env::temp_dir().join(format!("quicknews_broken_symtest_{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&temp_dir);
+
+    let nonexistent_target = temp_dir.join("does_not_exist.txt");
+    let broken_symlink = temp_dir.join("broken_symlink.txt");
+    let _ = std::os::unix::fs::symlink(&nonexistent_target, &broken_symlink);
+
+    // Both reading and writing to a dangling/broken symlink MUST be rejected as SymlinkForbidden
+    let read_res = safe_read_file(&broken_symlink, 1024);
+    assert!(read_res.is_err());
+
+    let write_res = atomic_write_file(&broken_symlink, b"guvensiz yazim");
+    assert!(write_res.is_err());
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_feed_item_flooding_dos_guard() {
+    let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?><rss version=\"2.0\"><channel><title>Sel Testi</title>");
+    for i in 0..150 {
+        xml.push_str(&format!(
+            "<item><title>Haber {}</title><link>https://example.com/item/{}</link><description>Aciklama</description></item>",
+            i, i
+        ));
+    }
+    xml.push_str("</channel></rss>");
+
+    let items = FeedParser::parse_xml(&xml, "src_flood", "Sel Kaynagi", "Teknoloji").unwrap();
+    // 150 ogelik besleme en fazla 100 oge ile sinirlandirilmalidir
+    assert_eq!(items.len(), 100);
+}
+
+#[test]
+fn test_html_extractor_dom_depth_and_block_limits() {
+    // 50 seviye derinlikte ic ice gecmis HTML (derinlik > 32)
+    let mut deep_html = String::new();
+    for _ in 0..50 {
+        deep_html.push_str("<div>");
+    }
+    deep_html.push_str("<p>Cok derindeki metin paragrafi burada bulunuyor ve ayiklanmamali.</p>");
+    for _ in 0..50 {
+        deep_html.push_str("</div>");
+    }
+
+    let article = ArticleExtractor::extract(&deep_html, "https://example.com/deep");
+    // Derinlik 32'yi astigi icin icerik yigin tasmasina yol acmadan guvenle sonlanmali
+    assert!(!article.content_text.contains("Cok derindeki metin paragrafi"));
+}
+
+#[test]
+fn test_url_userinfo_rejection() {
+    use quicknews_core::core::security::validate_url_ssrf_and_resolve;
+    // URL containing credentials (user:pass@host) must be rejected
+    assert!(validate_url_ssrf_and_resolve("http://admin:secret@example.com/test").is_err());
+    assert!(validate_url_ssrf_and_resolve("https://user@example.com/path").is_err());
+}
+
+#[test]
+fn test_storage_add_source_sanitization() {
+    use quicknews_core::core::storage::StorageManager;
+    let storage = StorageManager::new();
+
+    // CRLF injection attempt
+    let crlf_res = storage.add_source("Kaynak\nInjected", "injected.com", "https://injected.com/feed", "Teknoloji");
+    assert!(crlf_res.is_err());
+
+    // Excessively long parameter (> 100 chars)
+    let long_name = "A".repeat(105);
+    let long_res = storage.add_source(&long_name, "valid.com", "https://valid.com/feed", "Teknoloji");
+    assert!(long_res.is_err());
+
+    // Private IP SSRF attempt in feed URL
+    let ssrf_res = storage.add_source("SSRF Kaynak", "192.168.1.1", "http://192.168.1.1/feed", "Teknoloji");
+    assert!(ssrf_res.is_err());
+}
