@@ -189,12 +189,39 @@ async fn main() {
             let target = match find_positional_arg(&args, 2) {
                 Some(t) => t,
                 None => {
-                    eprintln!("Kullanim: quicknews-engine mark-read [--] <HaberID>");
+                    eprintln!("Kullanim: quicknews-engine mark-read [--] <HaberID veya Link>");
                     std::process::exit(1);
                 }
             };
             let _ = app.storage.mark_article_read(target);
             println!("OK");
+        }
+        "mark-unread" => {
+            let target = match find_positional_arg(&args, 2) {
+                Some(t) => t,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine mark-unread [--] <HaberID veya Link>");
+                    std::process::exit(1);
+                }
+            };
+            let _ = app.storage.set_article_read_state(target, false);
+            println!("OK");
+        }
+        "toggle-read" => {
+            let target = match find_positional_arg(&args, 2) {
+                Some(t) => t,
+                None => {
+                    eprintln!("Kullanim: quicknews-engine toggle-read [--] <HaberID veya Link>");
+                    std::process::exit(1);
+                }
+            };
+            let (is_read, ok) = app.toggle_read_article(target);
+            let res = serde_json::json!({
+                "id": target,
+                "is_read": is_read,
+                "success": ok
+            });
+            println!("{}", res);
         }
         "save" => {
             let target = match find_positional_arg(&args, 2) {
@@ -328,6 +355,8 @@ fn print_usage() {
     println!("  add-source            Manuel haber kaynagi ekler");
     println!("  remove-source <id>    Haber kaynagini kaldirir");
     println!("  mark-read <id>        Haberi okundu olarak isaretler");
+    println!("  mark-unread <id>      Haberi okunmadi olarak isaretler");
+    println!("  toggle-read <id>      Haberin okundu/okunmadi durumunu degistirir");
     println!("  status                Uygulama durumunu JSON formatinda dondurur");
 }
 

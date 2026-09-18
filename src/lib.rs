@@ -194,6 +194,16 @@ impl QuickNewsApp {
         }
     }
 
+    /// Toggles read / unread status of an article by ID or URL.
+    pub fn toggle_read_article(&self, id_or_link: &str) -> (bool, bool) {
+        self.storage.toggle_article_read(id_or_link)
+    }
+
+    /// Sets read status of an article by ID or URL.
+    pub fn set_article_read(&self, id_or_link: &str, is_read: bool) -> Result<(), SecurityError> {
+        self.storage.set_article_read_state(id_or_link, is_read)
+    }
+
     /// Loads all bookmarked / saved articles.
     pub fn load_saved_articles(&self) -> Vec<FeedItem> {
         self.storage.load_saved()

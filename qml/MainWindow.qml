@@ -85,6 +85,18 @@ Rectangle {
         root.isLoadingContent = true;
         root.readBuffer = "";
 
+        // Mark as read in frontend model immediately (so it drops from unread filter)
+        for (var i = 0; i < root.articlesList.length; i++) {
+            if (root.articlesList[i].id === article.id) {
+                root.articlesList[i].is_read = true;
+                break;
+            }
+        }
+        root.articlesList = root.articlesList.slice();
+        if (root.selectedArticle) {
+            root.selectedArticle.is_read = true;
+        }
+
         // Mark as read in engine
         markReadProc.command = [root.engineBin, "mark-read", "--", article.id];
         markReadProc.running = true;
@@ -92,6 +104,28 @@ Rectangle {
         // Read clean text
         readProc.command = [root.engineBin, "read", "--", article.link, "--json"];
         readProc.running = true;
+    }
+
+    function toggleReadArticle(idOrLink) {
+        if (!idOrLink) return;
+        var found = false;
+        var newState = false;
+        for (var i = 0; i < root.articlesList.length; i++) {
+            if (root.articlesList[i].id === idOrLink || root.articlesList[i].link === idOrLink) {
+                root.articlesList[i].is_read = !root.articlesList[i].is_read;
+                newState = root.articlesList[i].is_read;
+                found = true;
+                break;
+            }
+        }
+        if (found) {
+            root.articlesList = root.articlesList.slice();
+            if (root.selectedArticle && (root.selectedArticle.id === idOrLink || root.selectedArticle.link === idOrLink)) {
+                root.selectedArticle.is_read = newState;
+            }
+        }
+        toggleReadProc.command = [root.engineBin, "toggle-read", "--", idOrLink];
+        toggleReadProc.running = true;
     }
 
     function toggleSaveArticle(idOrLink) {
@@ -256,6 +290,9 @@ Rectangle {
             onArticleSelected: function(art) {
                 root.loadArticleContent(art);
             }
+            onToggleReadRequested: function(artId) {
+                root.toggleReadArticle(artId);
+            }
             onTagSelected: function(tag) {
                 root.applyTagCategory(tag);
             }
@@ -285,6 +322,9 @@ Rectangle {
             }
             onToggleSaveRequested: function(url) {
                 root.toggleSaveArticle(url);
+            }
+            onToggleReadRequested: function(artId) {
+                root.toggleReadArticle(artId);
             }
             onToggleZenRequested: {
                 root.isZenMode = !root.isZenMode;
@@ -457,5 +497,9 @@ Rectangle {
 
     Process {
         id: markReadProc
+    }
+
+    Process {
+        id: toggleReadProc
     }
 }

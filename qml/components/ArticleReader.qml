@@ -18,6 +18,7 @@ Rectangle {
     signal summarizeRequested(string articleUrl)
     signal openExternalRequested(string articleUrl)
     signal toggleSaveRequested(string articleUrl)
+    signal toggleReadRequested(string articleId)
     signal toggleZenRequested()
     signal exportRequested(string articleUrl)
     signal tagSelected(string tag)
@@ -174,6 +175,37 @@ Rectangle {
                     onClicked: {
                         if (root.currentArticle && root.currentArticle.link) {
                             root.openExternalRequested(root.currentArticle.link);
+                        }
+                    }
+                }
+            }
+
+            // Read / Unread toggle button
+            Rectangle {
+                visible: root.currentArticle !== null
+                width: 28
+                height: 28
+                radius: Theme.radiusSm
+                color: readToggleToolbarMouse.containsMouse ? Theme.bgCardHover : Theme.bgSurface
+                border.color: (root.currentArticle && root.currentArticle.is_read) ? Theme.accentGreen : (readToggleToolbarMouse.containsMouse ? Theme.accent : "transparent")
+                border.width: 1
+
+                Text {
+                    anchors.centerIn: parent
+                    text: (root.currentArticle && root.currentArticle.is_read) ? Theme.iconCheckCircle : Theme.iconCircleOutline
+                    font.family: Theme.iconFont
+                    font.pixelSize: 12
+                    color: (root.currentArticle && root.currentArticle.is_read) ? Theme.accentGreen : (readToggleToolbarMouse.containsMouse ? Theme.textMain : Theme.textMuted)
+                }
+
+                MouseArea {
+                    id: readToggleToolbarMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (root.currentArticle) {
+                            root.toggleReadRequested(root.currentArticle.id);
                         }
                     }
                 }

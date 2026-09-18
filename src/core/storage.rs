@@ -168,13 +168,37 @@ impl StorageManager {
     }
 
     pub fn mark_article_read(&self, article_id: &str) -> Result<(), SecurityError> {
+        self.set_article_read_state(article_id, true)
+    }
+
+    pub fn set_article_read_state(&self, article_id_or_link: &str, is_read: bool) -> Result<(), SecurityError> {
         let mut articles = self.load_articles();
         for item in &mut articles {
-            if item.id == article_id {
-                item.is_read = true;
+            if item.id == article_id_or_link || item.link == article_id_or_link {
+                item.is_read = is_read;
             }
         }
         self.save_articles(&articles)
+    }
+
+    pub fn toggle_article_read(&self, article_id_or_link: &str) -> (bool, bool) {
+        let mut articles = self.load_articles();
+        let mut new_state = false;
+        let mut found = false;
+        for item in &mut articles {
+            if item.id == article_id_or_link || item.link == article_id_or_link {
+                item.is_read = !item.is_read;
+                new_state = item.is_read;
+                found = true;
+                break;
+            }
+        }
+        if found {
+            let ok = self.save_articles(&articles).is_ok();
+            (new_state, ok)
+        } else {
+            (false, false)
+        }
     }
 
     pub fn get_cached_content(&self, url: &str) -> Option<CleanArticle> {

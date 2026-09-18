@@ -515,4 +515,56 @@ fn test_ai_political_and_local_sources_discovery() {
     assert!(tags_local.contains(&"Yerel".to_string()));
 }
 
+#[test]
+fn test_toggle_article_read_and_set_read_state() {
+    use quicknews_core::core::feed::FeedItem;
+    use quicknews_core::core::storage::StorageManager;
+
+    let storage = StorageManager::new();
+    let test_item = FeedItem {
+        id: "test-toggle-read-123".to_string(),
+        source_id: "test-source".to_string(),
+        source_name: "Test Source".to_string(),
+        title: "Test Baslik".to_string(),
+        link: "https://example.com/test-toggle-read".to_string(),
+        published_date: None,
+        summary: "Ozet".to_string(),
+        is_read: false,
+        reading_time_mins: 1,
+        category: "Teknoloji".to_string(),
+        tags: vec![],
+    };
+
+    let mut articles = storage.load_articles();
+    articles.retain(|a| a.id != test_item.id);
+    articles.push(test_item.clone());
+    let _ = storage.save_articles(&articles);
+
+    // Initial state is unread (false)
+    let (new_state, ok) = storage.toggle_article_read(&test_item.id);
+    assert!(ok);
+    assert!(new_state);
+
+    // Verify persisted to storage
+    let reloaded = storage.load_articles();
+    let found = reloaded.iter().find(|a| a.id == test_item.id).unwrap();
+    assert!(found.is_read);
+
+    // Toggle again (should become false)
+    let (second_state, ok2) = storage.toggle_article_read(&test_item.id);
+    assert!(ok2);
+    assert!(!second_state);
+
+    // Set explicitly via set_article_read_state
+    let _ = storage.set_article_read_state(&test_item.id, true);
+    let reloaded2 = storage.load_articles();
+    let found2 = reloaded2.iter().find(|a| a.id == test_item.id).unwrap();
+    assert!(found2.is_read);
+
+    // Clean up test item
+    let mut clean_articles = storage.load_articles();
+    clean_articles.retain(|a| a.id != test_item.id);
+    let _ = storage.save_articles(&clean_articles);
+}
+
 

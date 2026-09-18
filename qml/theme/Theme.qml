@@ -63,6 +63,9 @@ QtObject {
     readonly property string iconBookmarkOutline: "\uf097"
     readonly property string iconExport: "\uf019"
     readonly property string iconFilter: "\uf0b0"
+    readonly property string iconCheckCircle: "\uf058"
+    readonly property string iconCircleOutline: "\uf111"
+    readonly property string iconCircleDot: "\uf192"
 
     // Filesystem Paths for Omarchy System Theme
     readonly property string homeDir: Quickshell.env("HOME")

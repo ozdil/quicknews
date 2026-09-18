@@ -12,12 +12,22 @@ Rectangle {
     property string activeSourceId: ""
     property string selectedArticleId: ""
     property string searchQuery: ""
-    property string statusFilter: "Tümü"
+    property string statusFilter: "Okunmamış"
     property string timeFilter: "Tümü"
     readonly property bool isSearchFocused: searchInput.activeFocus
 
+    readonly property int unreadCount: {
+        var c = 0;
+        if (!root.articles) return 0;
+        for (var i = 0; i < root.articles.length; i++) {
+            if (!root.articles[i].is_read) c++;
+        }
+        return c;
+    }
+
     signal articleSelected(var article)
     signal tagSelected(string tag)
+    signal toggleReadRequested(string articleId)
 
     color: Theme.bgBase
     border.color: Theme.border
@@ -242,7 +252,7 @@ Rectangle {
 
                     Text {
                         anchors.centerIn: parent
-                        text: modelData
+                        text: (modelData === "Okunmamış" && root.unreadCount > 0) ? (modelData + " (" + root.unreadCount + ")") : modelData
                         font.family: Theme.fontFamily
                         font.pixelSize: 10
                         font.bold: root.statusFilter === modelData
@@ -370,13 +380,33 @@ Rectangle {
                             Layout.fillWidth: true
                             spacing: 6
 
-                            // Unread indicator dot
+                            // Read / Unread interactive toggle button
                             Rectangle {
-                                width: 6
-                                height: 6
-                                radius: 3
-                                color: Theme.accentOrange
-                                visible: !modelData.is_read
+                                width: 16
+                                height: 16
+                                radius: 4
+                                color: readToggleMouse.containsMouse ? Theme.bgSurface : "transparent"
+                                border.color: readToggleMouse.containsMouse ? (modelData.is_read ? Theme.accentGreen : Theme.accentOrange) : "transparent"
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData.is_read ? Theme.iconCheck : (readToggleMouse.containsMouse ? Theme.iconCheck : Theme.iconCircleDot)
+                                    font.family: Theme.iconFont
+                                    font.pixelSize: 10
+                                    color: modelData.is_read ? Theme.accentGreen : (readToggleMouse.containsMouse ? Theme.accentGreen : Theme.accentOrange)
+                                }
+
+                                MouseArea {
+                                    id: readToggleMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: function(mouse) {
+                                        mouse.accepted = true;
+                                        root.toggleReadRequested(modelData.id);
+                                    }
+                                }
                             }
 
                             Text {
