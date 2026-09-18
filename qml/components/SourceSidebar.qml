@@ -10,6 +10,7 @@ Rectangle {
     property string activeCategory: "Tümü"
     property string selectedSourceId: ""
     property int unreadCount: 0
+    property bool isSyncing: false
 
     signal categorySelected(string category)
     signal sourceSelected(string sourceId)
@@ -19,6 +20,44 @@ Rectangle {
     color: Theme.bgDark
     border.color: Theme.border
     border.width: 1
+
+    function isSourceMatchingCategory(source, cat) {
+        if (!cat || cat === "Tümü") return true;
+        var c = cat.toLowerCase();
+        var sCat = (source.category || "").toLowerCase();
+        var sName = (source.name || "").toLowerCase();
+        var sDomain = (source.domain || "").toLowerCase();
+
+        if (c === "linux") {
+            return sCat.indexOf("linux") !== -1 || sName.indexOf("linux") !== -1 || sDomain.indexOf("phoronix") !== -1;
+        }
+        if (c === "teknoloji") {
+            return sCat.indexOf("teknoloji") !== -1 || sCat.indexOf("bilişim") !== -1 || sCat.indexOf("dijital") !== -1;
+        }
+        if (c === "donanım" || c === "donanim") {
+            return sCat.indexOf("donan") !== -1 || sName.indexOf("donan") !== -1 || sDomain.indexOf("hwp") !== -1;
+        }
+        if (c === "bilim") {
+            return sCat.indexOf("bilim") !== -1 || sName.indexOf("evrim") !== -1;
+        }
+        if (c === "girişimcilik" || c === "girisimcilik" || c === "girişim" || c === "girisim") {
+            return sCat.indexOf("girişim") !== -1 || sCat.indexOf("girisim") !== -1;
+        }
+
+        return sCat.indexOf(c) !== -1 || c.indexOf(sCat) !== -1;
+    }
+
+    function getFilteredSources() {
+        if (!root.sources || root.sources.length === 0) return [];
+        if (root.activeCategory === "Tümü") return root.sources;
+        var res = [];
+        for (var i = 0; i < root.sources.length; i++) {
+            if (isSourceMatchingCategory(root.sources[i], root.activeCategory)) {
+                res.push(root.sources[i]);
+            }
+        }
+        return res;
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -46,7 +85,7 @@ Rectangle {
                 Layout.fillWidth: true
             }
 
-            // Sync/Refresh Button
+            // Sync/Refresh Button (with active animation)
             Rectangle {
                 width: 28
                 height: 28
@@ -54,11 +93,20 @@ Rectangle {
                 color: refreshMouse.containsMouse ? Theme.bgCardHover : "transparent"
 
                 Text {
+                    id: refreshIcon
                     anchors.centerIn: parent
                     text: Theme.iconRefresh
                     font.family: Theme.iconFont
                     font.pixelSize: 13
-                    color: refreshMouse.containsMouse ? Theme.accent : Theme.textMuted
+                    color: root.isSyncing ? Theme.accentCyan : (refreshMouse.containsMouse ? Theme.accent : Theme.textMuted)
+
+                    RotationAnimation on rotation {
+                        running: root.isSyncing
+                        loops: Animation.Infinite
+                        from: 0
+                        to: 360
+                        duration: 800
+                    }
                 }
 
                 MouseArea {
@@ -66,6 +114,7 @@ Rectangle {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
+                    enabled: !root.isSyncing
                     onClicked: root.refreshRequested()
                 }
             }
@@ -123,7 +172,7 @@ Rectangle {
             spacing: 6
 
             Repeater {
-                model: ["Tümü", "Teknoloji", "Linux", "Bilim", "Ekonomi"]
+                model: ["Tümü", "Teknoloji", "Linux", "Donanım", "Bilim", "Girişimcilik"]
 
                 Rectangle {
                     width: catText.implicitWidth + 16
@@ -147,6 +196,8 @@ Rectangle {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             root.activeCategory = modelData;
+                            root.selectedSourceId = "";
+                            root.sourceSelected("");
                             root.categorySelected(modelData);
                         }
                     }
@@ -160,7 +211,7 @@ Rectangle {
             Layout.topMargin: 8
 
             Text {
-                text: "KAYNAKLAR (" + root.sources.length + ")"
+                text: "KAYNAKLAR (" + root.getFilteredSources().length + ")"
                 font.family: Theme.fontFamily
                 font.pixelSize: 10
                 font.bold: true
@@ -187,7 +238,7 @@ Rectangle {
             ListView {
                 id: sourceListView
                 width: parent.width
-                model: root.sources
+                model: root.getFilteredSources()
                 spacing: 4
 
                 delegate: Rectangle {

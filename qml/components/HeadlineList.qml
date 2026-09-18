@@ -36,8 +36,33 @@ Rectangle {
 
         for (var i = 0; i < root.articles.length; i++) {
             var a = root.articles[i];
-            if (root.activeCategory !== "Tümü" && a.category !== root.activeCategory) {
-                continue;
+            if (root.activeCategory !== "Tümü") {
+                var c = root.activeCategory.toLowerCase();
+                var aCat = (a.category || "").toLowerCase();
+                var matchCat = false;
+                if (c === "linux") {
+                    matchCat = aCat.indexOf("linux") !== -1 || (a.source_name && a.source_name.toLowerCase().indexOf("phoronix") !== -1);
+                } else if (c === "teknoloji") {
+                    matchCat = aCat.indexOf("teknoloji") !== -1 || aCat.indexOf("bilişim") !== -1 || aCat.indexOf("dijital") !== -1;
+                } else if (c === "donanım" || c === "donanim") {
+                    matchCat = aCat.indexOf("donan") !== -1 || (a.source_name && a.source_name.toLowerCase().indexOf("hwp") !== -1);
+                } else if (c === "bilim") {
+                    matchCat = aCat.indexOf("bilim") !== -1 || (a.source_name && a.source_name.toLowerCase().indexOf("evrim") !== -1);
+                } else if (c === "girişimcilik" || c === "girisimcilik" || c === "girişim") {
+                    matchCat = aCat.indexOf("girişim") !== -1 || aCat.indexOf("girisim") !== -1;
+                } else {
+                    matchCat = (aCat === c || aCat.indexOf(c) !== -1);
+                }
+                if (!matchCat && a.tags && a.tags.length > 0) {
+                    for (var t = 0; t < a.tags.length; t++) {
+                        var tagVal = (a.tags[t] || "").toLowerCase();
+                        if (tagVal.indexOf(c) !== -1 || c.indexOf(tagVal) !== -1) {
+                            matchCat = true;
+                            break;
+                        }
+                    }
+                }
+                if (!matchCat) continue;
             }
             if (root.activeSourceId && a.source_id !== root.activeSourceId) {
                 continue;
@@ -372,6 +397,36 @@ Rectangle {
                             Layout.fillWidth: true
                             maximumLineCount: 2
                             elide: Text.ElideRight
+                        }
+
+                        // Automatic Topic & Source Tags Badges
+                        Flow {
+                            visible: modelData.tags && modelData.tags.length > 0
+                            Layout.fillWidth: true
+                            spacing: 4
+
+                            Repeater {
+                                model: modelData.tags ? modelData.tags : []
+
+                                Rectangle {
+                                    height: 18
+                                    width: tagBadgeText.implicitWidth + 10
+                                    radius: 3
+                                    color: Theme.bgSurface
+                                    border.color: Theme.border
+                                    border.width: 1
+
+                                    Text {
+                                        id: tagBadgeText
+                                        anchors.centerIn: parent
+                                        text: modelData
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: 9
+                                        font.bold: true
+                                        color: Theme.accentCyan
+                                    }
+                                }
+                            }
                         }
                     }
 

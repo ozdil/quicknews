@@ -79,6 +79,17 @@ impl AdBlocker {
             "author-box",
             "print-tool",
             "content-support",
+            "related",
+            "inloop",
+            "check-this-out",
+            "carousel",
+            "listing",
+            "post-navigation",
+            "recommended",
+            "similar",
+            "widget-post",
+            "entry-related",
+            "popular-post",
         ];
 
         for p in &patterns {

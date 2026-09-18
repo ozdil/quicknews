@@ -371,6 +371,39 @@ Rectangle {
                         }
                     }
 
+                    // Article Tags Badges (Automatic AI & Source categorization tags)
+                    Flow {
+                        visible: (root.fullCleanArticle && root.fullCleanArticle.tags && root.fullCleanArticle.tags.length > 0) ||
+                                 (root.currentArticle && root.currentArticle.tags && root.currentArticle.tags.length > 0)
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Repeater {
+                            model: (root.fullCleanArticle && root.fullCleanArticle.tags && root.fullCleanArticle.tags.length > 0) ?
+                                   root.fullCleanArticle.tags :
+                                   (root.currentArticle && root.currentArticle.tags ? root.currentArticle.tags : [])
+
+                            Rectangle {
+                                height: 22
+                                width: rdrTagText.implicitWidth + 14
+                                radius: 4
+                                color: Theme.bgSurface
+                                border.color: Theme.border
+                                border.width: 1
+
+                                Text {
+                                    id: rdrTagText
+                                    anchors.centerIn: parent
+                                    text: modelData
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    color: Theme.accentCyan
+                                }
+                            }
+                        }
+                    }
+
                     // AI Summary Card (if generated)
                     Rectangle {
                         visible: root.aiSummary !== null

@@ -1,4 +1,5 @@
 use crate::core::adblock::AdBlocker;
+use crate::core::ai::AiEngine;
 use crate::core::security::{fetch_bounded_content, validate_url_ssrf, SecurityError, MAX_HTTP_PAYLOAD_SIZE};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
@@ -16,6 +17,8 @@ pub struct FeedItem {
     pub source_name: String,
     pub source_id: String,
     pub category: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
     pub is_read: bool,
     pub reading_time_mins: usize,
 }
@@ -215,6 +218,7 @@ impl FeedParser {
                             let reading_time = if word_count == 0 { 1 } else { (word_count + 199) / 200 };
 
                             let unique_id = format!("{:x}", md5_hash(&format!("{}{}", source_id, clean_link)));
+                            let auto_tags = AiEngine::auto_classify_tags(source_name, category, &clean_title, &plain_summary);
 
                             items.push(FeedItem {
                                 id: unique_id,
@@ -229,6 +233,7 @@ impl FeedParser {
                                 source_name: source_name.to_string(),
                                 source_id: source_id.to_string(),
                                 category: category.to_string(),
+                                tags: auto_tags,
                                 is_read: false,
                                 reading_time_mins: reading_time,
                             });

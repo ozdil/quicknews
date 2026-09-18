@@ -21,6 +21,12 @@ Rectangle {
     property string promptStatus: ""
     property bool showAddModal: false
     property bool isZenMode: false
+    property string articlesBuffer: ""
+    property string readBuffer: ""
+    property string sourcesBuffer: ""
+    property string savedBuffer: ""
+    property string summaryBuffer: ""
+    property string promptBuffer: ""
 
     color: Theme.bgDark
     focus: true
@@ -48,23 +54,27 @@ Rectangle {
     }
 
     function loadSources() {
+        root.sourcesBuffer = "";
         sourcesProc.command = [root.engineBin, "sources", "--json"];
         sourcesProc.running = true;
     }
 
     function loadArticles() {
+        root.articlesBuffer = "";
         articlesProc.command = [root.engineBin, "list", "--json"];
         articlesProc.running = true;
     }
 
     function loadSavedArticles() {
+        root.savedBuffer = "";
         savedProc.command = [root.engineBin, "saved", "--json"];
         savedProc.running = true;
     }
 
     function syncFeeds() {
+        if (root.isSyncing) return;
         root.isSyncing = true;
-        syncProc.command = [root.engineBin, "sync", "--json"];
+        syncProc.command = [root.engineBin, "sync"];
         syncProc.running = true;
     }
 
@@ -73,6 +83,7 @@ Rectangle {
         root.fullCleanArticle = null;
         root.aiSummaryData = null;
         root.isLoadingContent = true;
+        root.readBuffer = "";
 
         // Mark as read in engine
         markReadProc.command = [root.engineBin, "mark-read", article.id];
@@ -97,12 +108,14 @@ Rectangle {
 
     function requestAiSummary(url) {
         root.isLoadingAi = true;
+        root.summaryBuffer = "";
         summaryProc.command = [root.engineBin, "summarize", url, "--json"];
         summaryProc.running = true;
     }
 
     function submitPromptAdd(promptText) {
         root.isAddingPrompt = true;
+        root.promptBuffer = "";
         root.promptStatus = "Yapay zeka kaynaklari analiz ediyor ve RSS akislarini dogruluyor...";
         addPromptProc.command = [root.engineBin, "add-prompt", promptText, "--json"];
         addPromptProc.running = true;
@@ -160,6 +173,7 @@ Rectangle {
             Layout.preferredWidth: root.isZenMode ? 0 : 250
             Layout.minimumWidth: root.isZenMode ? 0 : 220
             sources: root.sourcesList
+            isSyncing: root.isSyncing
             unreadCount: {
                 var c = 0;
                 for (var i = 0; i < root.articlesList.length; i++) {
@@ -246,10 +260,16 @@ Rectangle {
         id: sourcesProc
         stdout: SplitParser {
             onRead: function(data) {
-                try {
-                    root.sourcesList = JSON.parse(data);
-                } catch(e) {}
+                root.sourcesBuffer += data;
             }
+        }
+        onExited: function(exitCode) {
+            try {
+                if (root.sourcesBuffer.trim().length > 0) {
+                    root.sourcesList = JSON.parse(root.sourcesBuffer);
+                }
+            } catch(e) {}
+            root.sourcesBuffer = "";
         }
     }
 
@@ -257,10 +277,16 @@ Rectangle {
         id: articlesProc
         stdout: SplitParser {
             onRead: function(data) {
-                try {
-                    root.articlesList = JSON.parse(data);
-                } catch(e) {}
+                root.articlesBuffer += data;
             }
+        }
+        onExited: function(exitCode) {
+            try {
+                if (root.articlesBuffer.trim().length > 0) {
+                    root.articlesList = JSON.parse(root.articlesBuffer);
+                }
+            } catch(e) {}
+            root.articlesBuffer = "";
         }
     }
 
@@ -268,23 +294,26 @@ Rectangle {
         id: savedProc
         stdout: SplitParser {
             onRead: function(data) {
-                try {
-                    root.savedArticlesList = JSON.parse(data);
-                } catch(e) {}
+                root.savedBuffer += data;
             }
+        }
+        onExited: function(exitCode) {
+            try {
+                if (root.savedBuffer.trim().length > 0) {
+                    root.savedArticlesList = JSON.parse(root.savedBuffer);
+                }
+            } catch(e) {}
+            root.savedBuffer = "";
         }
     }
 
     Process {
         id: syncProc
-        stdout: SplitParser {
-            onRead: function(data) {
-                try {
-                    root.articlesList = JSON.parse(data);
-                } catch(e) {}
-                root.isSyncing = false;
-                root.loadSavedArticles();
-            }
+        onExited: function(exitCode) {
+            root.isSyncing = false;
+            root.loadArticles();
+            root.loadSources();
+            root.loadSavedArticles();
         }
     }
 
@@ -310,11 +339,17 @@ Rectangle {
         id: readProc
         stdout: SplitParser {
             onRead: function(data) {
-                try {
-                    root.fullCleanArticle = JSON.parse(data);
-                } catch(e) {}
-                root.isLoadingContent = false;
+                root.readBuffer += data;
             }
+        }
+        onExited: function(exitCode) {
+            try {
+                if (root.readBuffer.trim().length > 0) {
+                    root.fullCleanArticle = JSON.parse(root.readBuffer);
+                }
+            } catch(e) {}
+            root.readBuffer = "";
+            root.isLoadingContent = false;
         }
     }
 
@@ -322,11 +357,17 @@ Rectangle {
         id: summaryProc
         stdout: SplitParser {
             onRead: function(data) {
-                try {
-                    root.aiSummaryData = JSON.parse(data);
-                } catch(e) {}
-                root.isLoadingAi = false;
+                root.summaryBuffer += data;
             }
+        }
+        onExited: function(exitCode) {
+            try {
+                if (root.summaryBuffer.trim().length > 0) {
+                    root.aiSummaryData = JSON.parse(root.summaryBuffer);
+                }
+            } catch(e) {}
+            root.summaryBuffer = "";
+            root.isLoadingAi = false;
         }
     }
 
@@ -334,17 +375,26 @@ Rectangle {
         id: addPromptProc
         stdout: SplitParser {
             onRead: function(data) {
-                root.isAddingPrompt = false;
-                try {
-                    var added = JSON.parse(data);
+                root.promptBuffer += data;
+            }
+        }
+        onExited: function(exitCode) {
+            root.isAddingPrompt = false;
+            try {
+                if (root.promptBuffer.trim().length > 0) {
+                    var added = JSON.parse(root.promptBuffer);
                     root.promptStatus = "Basariyla " + added.length + " yeni kaynak eklendi!";
                     root.loadSources();
                     root.syncFeeds();
-                } catch(e) {
-                    root.promptStatus = "Kaynaklar eklendi.";
+                } else {
+                    root.promptStatus = "Kaynaklar kontrol edildi.";
                     root.loadSources();
                 }
+            } catch(e) {
+                root.promptStatus = "Kaynaklar eklendi.";
+                root.loadSources();
             }
+            root.promptBuffer = "";
         }
     }
 

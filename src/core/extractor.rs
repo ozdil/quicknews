@@ -8,6 +8,12 @@ pub struct CleanArticle {
     pub author: Option<String>,
     pub published_date: Option<String>,
     pub source_url: String,
+    #[serde(default)]
+    pub source_name: Option<String>,
+    #[serde(default)]
+    pub category: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
     pub content_text: String,
     pub word_count: usize,
     pub reading_time_mins: usize,
@@ -48,6 +54,9 @@ impl ArticleExtractor {
             author,
             published_date,
             source_url: source_url.to_string(),
+            source_name: None,
+            category: None,
+            tags: Vec::new(),
             content_text,
             word_count,
             reading_time_mins,
@@ -119,16 +128,17 @@ impl ArticleExtractor {
     fn extract_body_text(document: &Html) -> String {
         // Best candidates for article containers
         let candidate_selectors = [
-            "article",
             "[itemprop='articleBody']",
+            ".entry-content",
             ".article-content",
             ".article-body",
             ".post-content",
-            ".entry-content",
             ".story-body",
             ".news-content",
             ".detail-text",
             ".content-body",
+            "article:not(.inloop):not(.related)",
+            "article",
             "main",
         ];
 

@@ -134,6 +134,19 @@ impl AiEngine {
             "instagram takip et",
             "video bitince sonrakine geç",
             "video bitince sonrakine gec",
+            "ilginizi çekebilir",
+            "ilginizi cekebilir",
+            "benzer haberler",
+            "ilgili yazılar",
+            "ilgili yazilar",
+            "sıradaki haber",
+            "siradaki haber",
+            "şunlar da ilginizi",
+            "sunlar da ilginizi",
+            "göz atmak isteyebilirsiniz",
+            "goz atmak isteyebilirsiniz",
+            "en çok okunanlar",
+            "en cok okunanlar",
         ];
 
         for line in lines {
@@ -143,6 +156,18 @@ impl AiEngine {
             }
 
             let lower = line_trimmed.to_lowercase();
+
+            // If related/suggested news widget starts and we already have sufficient article text, stop processing
+            if (lower.starts_with("ilginizi çekebilir")
+                || lower.starts_with("ilginizi cekebilir")
+                || lower.starts_with("benzer haberler")
+                || lower.starts_with("sıradaki haber")
+                || lower.starts_with("şunlar da ilginizi"))
+                && clean_blocks.len() >= 2
+            {
+                break;
+            }
+
             let is_clutter = clutter_signatures.iter().any(|&sig| lower.contains(sig));
             if is_clutter {
                 continue;
@@ -200,11 +225,30 @@ impl AiEngine {
             clean_blocks.push(trimmed.to_string());
         }
 
-        // Group into semantic paragraphs
+        // Strip trailing orphaned headings that don't have body content below them
+        while clean_blocks.last().map_or(false, |b| b.starts_with("##") || b.starts_with("###")) {
+            clean_blocks.pop();
+        }
+
+        // Group into semantic paragraphs with clear heading separation
         let mut output = String::new();
         let mut in_list = false;
 
         for block in clean_blocks {
+            if block.starts_with("##") {
+                if in_list {
+                    output.push('\n');
+                    in_list = false;
+                }
+                if !output.is_empty() {
+                    // Basliktan evvel mutlaka belirgin bir satir bosluk birak (\n\n\n)
+                    output.push_str("\n\n\n");
+                }
+                output.push_str(&block);
+                output.push_str("\n\n");
+                continue;
+            }
+
             let is_list_item = block.starts_with("- ")
                 || (block.chars().next().map_or(false, |c| c.is_ascii_digit()) && block.contains(". "));
 
@@ -219,10 +263,18 @@ impl AiEngine {
                 if in_list {
                     output.push('\n');
                     in_list = false;
-                } else if !output.is_empty() {
-                    output.push_str("\n\n");
                 }
-                output.push_str(&block);
+                let comfortable_p = Self::format_comfortable_paragraphs(&block);
+                for p in comfortable_p {
+                    if !output.is_empty() && !output.ends_with("\n\n") {
+                        if output.ends_with('\n') {
+                            output.push('\n');
+                        } else {
+                            output.push_str("\n\n");
+                        }
+                    }
+                    output.push_str(&p);
+                }
             }
         }
 
@@ -231,6 +283,206 @@ impl AiEngine {
         } else {
             output
         }
+    }
+
+    /// Automatically fixes punctuation spacing (e.g. "suçladı.Çin" -> "suçladı. Çin")
+    pub fn fix_sentence_spacing(text: &str) -> String {
+        let mut result = String::with_capacity(text.len() + 16);
+        let chars: Vec<char> = text.chars().collect();
+        let len = chars.len();
+
+        for i in 0..len {
+            result.push(chars[i]);
+            if (chars[i] == '.' || chars[i] == '!' || chars[i] == '?') && i + 1 < len {
+                let next_ch = chars[i + 1];
+                if next_ch.is_uppercase() {
+                    let prev_short = i >= 2 && (chars[i - 1].is_lowercase() || chars[i - 1].is_uppercase()) && i >= 3 && chars[i - 2] == '.';
+                    if !prev_short {
+                        result.push(' ');
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    /// Splits an overly long monolithic block into comfortable 2-3 sentence paragraphs
+    pub fn format_comfortable_paragraphs(text: &str) -> Vec<String> {
+        let cleaned = Self::fix_sentence_spacing(text);
+        let word_count = cleaned.split_whitespace().count();
+
+        if word_count < 65 {
+            return vec![cleaned];
+        }
+
+        let mut paragraphs = Vec::new();
+        let mut current_p = String::new();
+        let mut sentence_count = 0;
+
+        let parts = cleaned.split_inclusive(|c| c == '.' || c == '!' || c == '?');
+        for part in parts {
+            current_p.push_str(part);
+            let trimmed = part.trim();
+            if trimmed.ends_with('.') || trimmed.ends_with('!') || trimmed.ends_with('?') {
+                sentence_count += 1;
+                if sentence_count >= 3 && current_p.split_whitespace().count() >= 35 {
+                    paragraphs.push(current_p.trim().to_string());
+                    current_p.clear();
+                    sentence_count = 0;
+                }
+            }
+        }
+
+        if !current_p.trim().is_empty() {
+            paragraphs.push(current_p.trim().to_string());
+        }
+
+        if paragraphs.is_empty() {
+            vec![cleaned]
+        } else {
+            paragraphs
+        }
+    }
+
+    /// Automatically classifies news source and content into accurate tags
+    pub fn auto_classify_tags(source_name: &str, category: &str, title: &str, text: &str) -> Vec<String> {
+        let mut tags = Vec::new();
+
+        let cat_trimmed = category.trim();
+        if !cat_trimmed.is_empty() && cat_trimmed != "Genel" && cat_trimmed != "Tümü" {
+            tags.push(cat_trimmed.to_string());
+        }
+
+        let combined = format!("{} {} {}", title, text, source_name).to_lowercase();
+
+        if combined.contains("yapay zeka")
+            || combined.contains("yapay zekâ")
+            || combined.contains(" ai ")
+            || combined.contains("llm")
+            || combined.contains("gemini")
+            || combined.contains("chatgpt")
+            || combined.contains("openai")
+            || combined.contains("claude")
+            || combined.contains("anthropic")
+            || combined.contains("qwen")
+            || combined.contains("deepseek")
+            || combined.contains("makine öğrenimi")
+        {
+            if !tags.iter().any(|t| t == "Yapay Zeka") {
+                tags.push("Yapay Zeka".to_string());
+            }
+        }
+
+        if combined.contains("donanım")
+            || combined.contains("donanim")
+            || combined.contains("işlemci")
+            || combined.contains("islemci")
+            || combined.contains("ekran kartı")
+            || combined.contains("ekran karti")
+            || combined.contains("gpu")
+            || combined.contains("cpu")
+            || combined.contains("rtx")
+            || combined.contains("geforce")
+            || combined.contains("intel")
+            || combined.contains("amd")
+            || combined.contains("nvidia")
+            || combined.contains("anakart")
+        {
+            if !tags.iter().any(|t| t == "Donanım") {
+                tags.push("Donanım".to_string());
+            }
+        }
+
+        if combined.contains("siber")
+            || combined.contains("güvenlik")
+            || combined.contains("guvenlik")
+            || combined.contains("hacker")
+            || combined.contains("fbi")
+            || combined.contains("casus")
+            || combined.contains("malware")
+            || combined.contains("fidye")
+            || combined.contains("zafiyet")
+            || combined.contains("açık")
+        {
+            if !tags.iter().any(|t| t == "Siber Güvenlik") {
+                tags.push("Siber Güvenlik".to_string());
+            }
+        }
+
+        if combined.contains("iphone")
+            || combined.contains("apple")
+            || combined.contains("android")
+            || combined.contains("samsung")
+            || combined.contains("ios")
+            || combined.contains("xiaomi")
+            || combined.contains("akıllı telefon")
+            || combined.contains("telefon")
+        {
+            if !tags.iter().any(|t| t == "Mobil") {
+                tags.push("Mobil".to_string());
+            }
+        }
+
+        if combined.contains("linux")
+            || combined.contains("açık kaynak")
+            || combined.contains("acik kaynak")
+            || combined.contains("kernel")
+            || combined.contains("ubuntu")
+            || combined.contains("arch")
+            || combined.contains("fedora")
+            || combined.contains("gnome")
+            || combined.contains("omarchy")
+        {
+            if !tags.iter().any(|t| t == "Açık Kaynak") {
+                tags.push("Açık Kaynak".to_string());
+            }
+        }
+
+        if combined.contains("oyun")
+            || combined.contains("steam")
+            || combined.contains("playstation")
+            || combined.contains("xbox")
+            || combined.contains("nintendo")
+            || combined.contains("game")
+        {
+            if !tags.iter().any(|t| t == "Oyun") {
+                tags.push("Oyun".to_string());
+            }
+        }
+
+        if combined.contains("girişim")
+            || combined.contains("girisim")
+            || combined.contains("startup")
+            || combined.contains("yatırım")
+            || combined.contains("yatirim")
+            || combined.contains("değerleme")
+            || combined.contains("fon")
+            || combined.contains("fintech")
+        {
+            if !tags.iter().any(|t| t == "Girişimcilik") {
+                tags.push("Girişimcilik".to_string());
+            }
+        }
+
+        if combined.contains("uzay")
+            || combined.contains("nasa")
+            || combined.contains("bilim")
+            || combined.contains("fizik")
+            || combined.contains("evrim")
+            || combined.contains("biyoloji")
+            || combined.contains("teleskop")
+        {
+            if !tags.iter().any(|t| t == "Bilim") {
+                tags.push("Bilim".to_string());
+            }
+        }
+
+        if tags.is_empty() {
+            tags.push("Teknoloji".to_string());
+        }
+
+        tags.truncate(3);
+        tags
     }
 
     /// Generates neutral headline and 3 key points summary from clean article text.

@@ -48,6 +48,13 @@ impl QuickNewsApp {
         let mut all_articles = new_items;
         all_articles.extend(existing);
 
+        // Auto classify tags if empty
+        for item in &mut all_articles {
+            if item.tags.is_empty() {
+                item.tags = AiEngine::auto_classify_tags(&item.source_name, &item.category, &item.title, &item.summary);
+            }
+        }
+
         // Cap total cached articles to 500 to keep memory small and snappy
         if all_articles.len() > 500 {
             all_articles.truncate(500);
@@ -74,6 +81,19 @@ impl QuickNewsApp {
         let word_count = article.content_text.split_whitespace().count();
         article.word_count = word_count;
         article.reading_time_mins = if word_count == 0 { 1 } else { (word_count + 199) / 200 };
+
+        // Attach source metadata and auto-classified tags
+        let existing_items = self.storage.load_articles();
+        if let Some(item) = existing_items.iter().find(|i| i.link == url) {
+            article.source_name = Some(item.source_name.clone());
+            article.category = Some(item.category.clone());
+            article.tags = item.tags.clone();
+        }
+        if article.tags.is_empty() {
+            let s_name = article.source_name.as_deref().unwrap_or("Teknoloji");
+            let c_name = article.category.as_deref().unwrap_or("Teknoloji");
+            article.tags = AiEngine::auto_classify_tags(s_name, c_name, &article.title, &article.content_text);
+        }
 
         // Cache clean result
         let _ = self.storage.cache_article_content(url, &article);

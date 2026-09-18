@@ -31,12 +31,14 @@ async fn main() {
                 println!("=== QuickNews Haber Akisi ({} haber) ===", articles.len());
                 for (i, art) in articles.iter().enumerate().take(30) {
                     let status = if art.is_read { "[Okundu] " } else { "[YENI]   " };
+                    let tags_str = if art.tags.is_empty() { String::new() } else { format!(" [{}]", art.tags.join("/")) };
                     println!(
-                        "{:2}. {} [{}] {} ({} dk okuma)",
+                        "{:2}. {} [{}] {}{} ({} dk okuma)",
                         i + 1,
                         status,
                         art.source_name,
                         art.title,
+                        tags_str,
                         art.reading_time_mins
                     );
                 }
@@ -62,6 +64,9 @@ async fn main() {
                         }
                         if let Some(ref d) = clean.published_date {
                             println!("TARIH : {}", d);
+                        }
+                        if !clean.tags.is_empty() {
+                            println!("ETIKET: {}", clean.tags.join(" | "));
                         }
                         println!("SURE  : Yaklasik {} dakika okuma ({} kelime)", clean.reading_time_mins, clean.word_count);
                         println!("KAYNAK: {}", clean.source_url);
