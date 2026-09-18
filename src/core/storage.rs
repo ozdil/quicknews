@@ -200,13 +200,23 @@ impl StorageManager {
     /// Prunes oldest cache files when total cache file count exceeds max_files.
     pub fn prune_content_cache(&self, max_files: usize) {
         let cache_dir = self.data_dir.join("content_cache");
-        if let Ok(entries) = std::fs::read_dir(&cache_dir) {
+        Self::prune_cache_directory(&cache_dir, max_files);
+    }
+
+    /// Prunes a specific cache directory, strictly rejecting and removing symlinks.
+    pub fn prune_cache_directory(cache_dir: &std::path::Path, max_files: usize) {
+        if let Ok(entries) = std::fs::read_dir(cache_dir) {
             let mut files = Vec::new();
             for entry in entries.flatten() {
-                if let Ok(meta) = entry.metadata() {
+                let path = entry.path();
+                if let Ok(meta) = path.symlink_metadata() {
+                    if meta.file_type().is_symlink() {
+                        let _ = std::fs::remove_file(&path);
+                        continue;
+                    }
                     if meta.is_file() {
                         let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-                        files.push((entry.path(), mtime));
+                        files.push((path, mtime));
                     }
                 }
             }

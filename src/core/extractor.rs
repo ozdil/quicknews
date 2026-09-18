@@ -38,8 +38,9 @@ impl ArticleExtractor {
             .or_else(|| Self::extract_meta(&document, "date"))
             .or_else(|| Self::extract_meta(&document, "pubdate"));
 
-        // 4. Extract Main Article Body Content (Text-Only)
-        let content_text = Self::extract_body_text(&document);
+        // 4. Extract Main Article Body Content (Text-Only, stripped of any markdown image beacons)
+        let raw_body = Self::extract_body_text(&document);
+        let content_text = AdBlocker::strip_markdown_images(&raw_body);
 
         // 5. Calculate statistics
         let word_count = content_text.split_whitespace().count();

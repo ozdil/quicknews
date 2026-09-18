@@ -37,33 +37,45 @@ Rectangle {
         return false;
     }
 
-    function getFilteredArticles() {
-        if (!root.articles || root.articles.length === 0) return [];
-        var res = [];
-        var q = root.searchQuery.trim().toLowerCase();
+    function norm(s) {
+        if (!s) return "";
+        return String(s).toLowerCase()
+            .replace(/ı/g, "i")
+            .replace(/ğ/g, "g")
+            .replace(/ü/g, "u")
+            .replace(/ş/g, "s")
+            .replace(/ö/g, "o")
+            .replace(/ç/g, "c");
+    }
 
-        for (var i = 0; i < root.articles.length; i++) {
-            var a = root.articles[i];
+    function getFilteredArticles() {
+        var sourceList = (root.statusFilter === "Kaydedilenler") ? (root.savedArticles || []) : (root.articles || []);
+        if (sourceList.length === 0) return [];
+        var res = [];
+        var q = norm(root.searchQuery.trim());
+
+        for (var i = 0; i < sourceList.length; i++) {
+            var a = sourceList[i];
             if (root.activeCategory !== "Tümü") {
-                var c = root.activeCategory.toLowerCase();
-                var aCat = (a.category || "").toLowerCase();
+                var c = norm(root.activeCategory);
+                var aCat = norm(a.category || "");
                 var matchCat = false;
                 if (c === "linux") {
-                    matchCat = aCat.indexOf("linux") !== -1 || (a.source_name && a.source_name.toLowerCase().indexOf("phoronix") !== -1);
+                    matchCat = aCat.indexOf("linux") !== -1 || (a.source_name && norm(a.source_name).indexOf("phoronix") !== -1);
                 } else if (c === "teknoloji") {
-                    matchCat = aCat.indexOf("teknoloji") !== -1 || aCat.indexOf("bilişim") !== -1 || aCat.indexOf("dijital") !== -1;
-                } else if (c === "donanım" || c === "donanim") {
-                    matchCat = aCat.indexOf("donan") !== -1 || (a.source_name && a.source_name.toLowerCase().indexOf("hwp") !== -1);
+                    matchCat = aCat.indexOf("teknoloji") !== -1 || aCat.indexOf("bilisim") !== -1 || aCat.indexOf("dijital") !== -1;
+                } else if (c === "donanim") {
+                    matchCat = aCat.indexOf("donan") !== -1 || (a.source_name && norm(a.source_name).indexOf("hwp") !== -1);
                 } else if (c === "bilim") {
-                    matchCat = aCat.indexOf("bilim") !== -1 || (a.source_name && a.source_name.toLowerCase().indexOf("evrim") !== -1);
-                } else if (c === "girişimcilik" || c === "girisimcilik" || c === "girişim") {
-                    matchCat = aCat.indexOf("girişim") !== -1 || aCat.indexOf("girisim") !== -1;
+                    matchCat = aCat.indexOf("bilim") !== -1 || (a.source_name && norm(a.source_name).indexOf("evrim") !== -1);
+                } else if (c === "girisimcilik" || c === "girisim") {
+                    matchCat = aCat.indexOf("girisim") !== -1;
                 } else {
                     matchCat = (aCat === c || aCat.indexOf(c) !== -1);
                 }
                 if (!matchCat && a.tags && a.tags.length > 0) {
                     for (var t = 0; t < a.tags.length; t++) {
-                        var tagVal = (a.tags[t] || "").toLowerCase();
+                        var tagVal = norm(a.tags[t] || "");
                         if (tagVal.indexOf(c) !== -1 || c.indexOf(tagVal) !== -1) {
                             matchCat = true;
                             break;
@@ -91,9 +103,9 @@ Rectangle {
                 continue;
             }
             if (q.length > 0) {
-                var matchTitle = a.title && a.title.toLowerCase().indexOf(q) !== -1;
-                var matchSummary = a.summary && a.summary.toLowerCase().indexOf(q) !== -1;
-                var matchSource = a.source_name && a.source_name.toLowerCase().indexOf(q) !== -1;
+                var matchTitle = a.title && norm(a.title).indexOf(q) !== -1;
+                var matchSummary = a.summary && norm(a.summary).indexOf(q) !== -1;
+                var matchSource = a.source_name && norm(a.source_name).indexOf(q) !== -1;
                 if (!matchTitle && !matchSummary && !matchSource) continue;
             }
             res.push(a);
@@ -329,8 +341,20 @@ Rectangle {
                     border.color: root.selectedArticleId === modelData.id ? Theme.accent : Theme.border
                     border.width: 1
 
+                    MouseArea {
+                        id: itemMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.selectedArticleId = modelData.id;
+                            root.articleSelected(modelData);
+                        }
+                    }
+
                     ColumnLayout {
                         id: itemCol
+                        z: 1
                         anchors.fill: parent
                         anchors.margins: 10
                         spacing: 6
@@ -449,17 +473,6 @@ Rectangle {
                                     }
                                 }
                             }
-                        }
-                    }
-
-                    MouseArea {
-                        id: itemMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root.selectedArticleId = modelData.id;
-                            root.articleSelected(modelData);
                         }
                     }
                 }

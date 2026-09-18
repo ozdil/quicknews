@@ -24,6 +24,8 @@ impl AdBlocker {
                 | "footer"
                 | "nav"
                 | "aside"
+                | "figure"
+                | "figcaption"
                 | "svg"
                 | "canvas"
                 | "audio"
@@ -34,6 +36,33 @@ impl AdBlocker {
                 | "dialog"
                 | "menu"
         )
+    }
+
+    /// Strips markdown image syntax ![alt](url) to eliminate tracking pixels and web beacons.
+    pub fn strip_markdown_images(text: &str) -> String {
+        let mut result = String::with_capacity(text.len());
+        let mut chars = text.chars().peekable();
+        while let Some(ch) = chars.next() {
+            if ch == '!' && chars.peek() == Some(&'[') {
+                chars.next(); // consume '['
+                for c in chars.by_ref() {
+                    if c == ']' {
+                        break;
+                    }
+                }
+                if chars.peek() == Some(&'(') {
+                    chars.next(); // consume '('
+                    for c in chars.by_ref() {
+                        if c == ')' {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                result.push(ch);
+            }
+        }
+        result
     }
 
     /// Checks if a class or id attribute indicates an advertisement, tracker, cookie notice, or widget.

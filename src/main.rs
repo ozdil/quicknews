@@ -268,10 +268,27 @@ async fn main() {
             } else {
                 None
             };
+            let is_json = args.iter().any(|a| a == "--json");
             match app.export_article_to_markdown(url, target_path).await {
-                Ok(path) => println!("Haber basariyla disari aktarildi: {}", path.display()),
+                Ok(path) => {
+                    if is_json {
+                        println!("{}", serde_json::json!({
+                            "success": true,
+                            "path": path.display().to_string()
+                        }));
+                    } else {
+                        println!("Haber basariyla disari aktarildi: {}", path.display());
+                    }
+                }
                 Err(e) => {
-                    eprintln!("Disa aktarma hatasi: {}", e);
+                    if is_json {
+                        println!("{}", serde_json::json!({
+                            "success": false,
+                            "error": e.to_string()
+                        }));
+                    } else {
+                        eprintln!("Disa aktarma hatasi: {}", e);
+                    }
                     std::process::exit(1);
                 }
             }

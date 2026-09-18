@@ -169,19 +169,30 @@ Rectangle {
         }
     }
 
+    function norm(s) {
+        if (!s) return "";
+        return String(s).toLowerCase()
+            .replace(/ı/g, "i")
+            .replace(/ğ/g, "g")
+            .replace(/ü/g, "u")
+            .replace(/ş/g, "s")
+            .replace(/ö/g, "o")
+            .replace(/ç/g, "c");
+    }
+
     function applyTagCategory(tag) {
         if (!tag) return;
         var mappedCat = tag;
-        var t = tag.toLowerCase();
+        var t = norm(tag);
         if (t.indexOf("linux") !== -1) {
             mappedCat = "Linux";
         } else if (t.indexOf("teknoloji") !== -1 || t.indexOf("yapay zeka") !== -1) {
             mappedCat = "Teknoloji";
-        } else if (t.indexOf("donanım") !== -1 || t.indexOf("donanim") !== -1) {
+        } else if (t.indexOf("donan") !== -1) {
             mappedCat = "Donanım";
         } else if (t.indexOf("bilim") !== -1) {
             mappedCat = "Bilim";
-        } else if (t.indexOf("girişim") !== -1 || t.indexOf("girisim") !== -1) {
+        } else if (t.indexOf("girisim") !== -1) {
             mappedCat = "Girişimcilik";
         }
         sidebar.activeCategory = mappedCat;

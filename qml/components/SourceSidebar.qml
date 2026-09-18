@@ -21,27 +21,38 @@ Rectangle {
     border.color: Theme.border
     border.width: 1
 
+    function norm(s) {
+        if (!s) return "";
+        return String(s).toLowerCase()
+            .replace(/ı/g, "i")
+            .replace(/ğ/g, "g")
+            .replace(/ü/g, "u")
+            .replace(/ş/g, "s")
+            .replace(/ö/g, "o")
+            .replace(/ç/g, "c");
+    }
+
     function isSourceMatchingCategory(source, cat) {
         if (!cat || cat === "Tümü") return true;
-        var c = cat.toLowerCase();
-        var sCat = (source.category || "").toLowerCase();
-        var sName = (source.name || "").toLowerCase();
-        var sDomain = (source.domain || "").toLowerCase();
+        var c = norm(cat);
+        var sCat = norm(source.category || "");
+        var sName = norm(source.name || "");
+        var sDomain = norm(source.domain || "");
 
         if (c === "linux") {
             return sCat.indexOf("linux") !== -1 || sName.indexOf("linux") !== -1 || sDomain.indexOf("phoronix") !== -1;
         }
         if (c === "teknoloji") {
-            return sCat.indexOf("teknoloji") !== -1 || sCat.indexOf("bilişim") !== -1 || sCat.indexOf("dijital") !== -1;
+            return sCat.indexOf("teknoloji") !== -1 || sCat.indexOf("bilisim") !== -1 || sCat.indexOf("dijital") !== -1;
         }
-        if (c === "donanım" || c === "donanim") {
+        if (c === "donanim") {
             return sCat.indexOf("donan") !== -1 || sName.indexOf("donan") !== -1 || sDomain.indexOf("hwp") !== -1;
         }
         if (c === "bilim") {
             return sCat.indexOf("bilim") !== -1 || sName.indexOf("evrim") !== -1;
         }
-        if (c === "girişimcilik" || c === "girisimcilik" || c === "girişim" || c === "girisim") {
-            return sCat.indexOf("girişim") !== -1 || sCat.indexOf("girisim") !== -1;
+        if (c === "girisimcilik" || c === "girisim") {
+            return sCat.indexOf("girisim") !== -1;
         }
 
         return sCat.indexOf(c) !== -1 || c.indexOf(sCat) !== -1;

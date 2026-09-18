@@ -391,3 +391,42 @@ fn test_storage_add_source_sanitization() {
     let ssrf_res = storage.add_source("SSRF Kaynak", "192.168.1.1", "http://192.168.1.1/feed", "Teknoloji");
     assert!(ssrf_res.is_err());
 }
+
+#[test]
+fn test_strip_markdown_images_beacon_filter() {
+    let input = "Bu haber metnidir. ![Takip Pikseli](https://tracker.analytics.com/beacon.gif) Burada baska bir paragraf var. ![banner](https://ads.com/ad.jpg?user=123) Sonuc metni.";
+    let stripped = AdBlocker::strip_markdown_images(input);
+    assert!(!stripped.contains("https://tracker.analytics.com/beacon.gif"));
+    assert!(!stripped.contains("https://ads.com/ad.jpg"));
+    assert!(stripped.contains("Bu haber metnidir."));
+    assert!(stripped.contains("Burada baska bir paragraf var."));
+    assert!(stripped.contains("Sonuc metni."));
+}
+
+#[test]
+fn test_symlink_prune_cache_guard() {
+    use quicknews_core::core::storage::StorageManager;
+    let temp_cache = std::env::temp_dir().join(format!("quicknews_cache_symtest_{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&temp_cache);
+
+    // Target secret file outside cache
+    let secret_file = std::env::temp_dir().join(format!("quicknews_outside_secret_{}.txt", std::process::id()));
+    let _ = std::fs::write(&secret_file, b"gizli ve silinmemesi gereken sistem verisi");
+
+    // Infiltrated symlink inside cache pointing to secret
+    let symlink_in_cache = temp_cache.join("cached_article_symlink.json");
+    let _ = std::os::unix::fs::symlink(&secret_file, &symlink_in_cache);
+
+    // Run cache pruning
+    StorageManager::prune_cache_directory(&temp_cache, 0);
+
+    // Symlink in cache must be purged directly
+    assert!(std::fs::symlink_metadata(&symlink_in_cache).is_err());
+    // External target file must remain completely untouched and intact
+    assert!(secret_file.exists());
+    assert_eq!(std::fs::read(&secret_file).unwrap(), b"gizli ve silinmemesi gereken sistem verisi");
+
+    let _ = std::fs::remove_file(&secret_file);
+    let _ = std::fs::remove_dir_all(&temp_cache);
+}
+
