@@ -595,11 +595,13 @@ async fn test_evrim_agaci_extraction() {
     // Network test if available
     let url = "https://evrimagaci.org/project-rattlecam-ile-uc-eyalette-cingirakli-yilanlarin-canli-dogum-anlari-ilk-kez-goruntulendi-23801";
     if let Ok(resp) = reqwest::get(url).await {
-        if let Ok(html) = resp.text().await {
-            let extracted = ArticleExtractor::extract(&html, url);
-            assert!(!extracted.content_text.is_empty());
-            assert!(extracted.word_count > 100);
-            assert!(extracted.content_text.contains("RattleCam") || extracted.content_text.contains("çıngıraklı yılan"));
+        if resp.status().is_success() {
+            if let Ok(html) = resp.text().await {
+                let extracted = ArticleExtractor::extract(&html, url);
+                assert!(!extracted.content_text.is_empty());
+                assert!(extracted.word_count > 100);
+                assert!(extracted.content_text.contains("RattleCam") || extracted.content_text.contains("çıngıraklı yılan"));
+            }
         }
     }
 }

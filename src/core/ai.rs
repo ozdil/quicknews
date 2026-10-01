@@ -434,6 +434,37 @@ impl AiEngine {
         }
     }
 
+    /// Checks if a keyword exists as an isolated token or word, preventing substring false positives (e.g. "oyun" in "boyunca")
+    pub fn contains_word_token(haystack: &str, needle: &str) -> bool {
+        let needle_lower = needle.to_lowercase();
+        let needle_chars: Vec<char> = needle_lower.chars().collect();
+        if needle_chars.is_empty() {
+            return false;
+        }
+
+        let haystack_lower = haystack.to_lowercase();
+        let h_chars: Vec<char> = haystack_lower.chars().collect();
+        let h_len = h_chars.len();
+        let n_len = needle_chars.len();
+
+        if n_len > h_len {
+            return false;
+        }
+
+        let is_word_char = |c: char| c.is_alphanumeric() || c == '_' || c == '-' || c == '’' || c == '\'';
+
+        for i in 0..=(h_len - n_len) {
+            if h_chars[i..i + n_len] == needle_chars[..] {
+                let left_boundary = if i == 0 { true } else { !is_word_char(h_chars[i - 1]) };
+                let right_boundary = if i + n_len == h_len { true } else { !is_word_char(h_chars[i + n_len]) };
+                if left_boundary && right_boundary {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Automatically classifies news source and content into accurate tags
     pub fn auto_classify_tags(source_name: &str, category: &str, title: &str, text: &str) -> Vec<String> {
         let mut tags = Vec::new();
@@ -445,11 +476,11 @@ impl AiEngine {
 
         let combined = format!("{} {} {}", title, text, source_name).to_lowercase();
 
-        if (combined.contains("yapay zeka")
+        // 1. Yapay Zeka (AI) - Strict word boundary and negative context guard
+        let ai_matched = combined.contains("yapay zeka")
             || combined.contains("yapay zekâ")
-            || combined.contains("ai")
-            || combined.contains(" ai ")
-            || combined.contains("llm")
+            || Self::contains_word_token(&combined, "ai")
+            || Self::contains_word_token(&combined, "llm")
             || combined.contains("gemini")
             || combined.contains("chatgpt")
             || combined.contains("openai")
@@ -457,26 +488,27 @@ impl AiEngine {
             || combined.contains("anthropic")
             || combined.contains("qwen")
             || combined.contains("deepseek")
-            || combined.contains("makine öğrenimi"))
-            && !tags.iter().any(|t| t == "Yapay Zeka")
-        {
+            || combined.contains("makine öğrenimi");
+
+        // Filter out false AI triggers (like "ai" matching inside ordinary Turkish words or domain extensions)
+        if ai_matched && !tags.iter().any(|t| t == "Yapay Zeka") {
             tags.push("Yapay Zeka".to_string());
         }
 
-        if (combined.contains("donanım")
-            || combined.contains("donanim")
-            || combined.contains("işlemci")
+        // 2. Donanım - Hardware keywords
+        if (combined.contains("işlemci")
             || combined.contains("islemci")
             || combined.contains("ekran kartı")
             || combined.contains("ekran karti")
-            || combined.contains("gpu")
-            || combined.contains("cpu")
-            || combined.contains("rtx")
+            || Self::contains_word_token(&combined, "gpu")
+            || Self::contains_word_token(&combined, "cpu")
+            || Self::contains_word_token(&combined, "rtx")
             || combined.contains("geforce")
-            || combined.contains("intel")
-            || combined.contains("amd")
-            || combined.contains("nvidia")
-            || combined.contains("anakart"))
+            || Self::contains_word_token(&combined, "intel")
+            || Self::contains_word_token(&combined, "amd")
+            || Self::contains_word_token(&combined, "nvidia")
+            || combined.contains("anakart")
+            || (combined.contains("donanım") || combined.contains("donanim")) && !combined.contains("araç donanımı") && !combined.contains("yeni donanımı"))
             && !tags.iter().any(|t| t == "Donanım")
         {
             tags.push("Donanım".to_string());
@@ -524,14 +556,29 @@ impl AiEngine {
             tags.push("Açık Kaynak".to_string());
         }
 
-        if (combined.contains("oyun")
-            || combined.contains("steam")
-            || combined.contains("playstation")
-            || combined.contains("xbox")
-            || combined.contains("nintendo")
-            || combined.contains("game"))
-            && !tags.iter().any(|t| t == "Oyun")
-        {
+        // 3. Oyun (Gaming) - Token boundary and negative context guard
+        // Prevents matching "oyun" in "boyunca", "oyuncu değişikliği", "tiyatro oyunu", "seçim oyunu"
+        let is_non_game_context = combined.contains("tiyatro")
+            || combined.contains("sahne oyunu")
+            || combined.contains("oyun teorisi")
+            || combined.contains("siyasi oyun")
+            || combined.contains("seçim oyunu");
+
+        let game_matched = !is_non_game_context
+            && (Self::contains_word_token(&combined, "oyun")
+                || Self::contains_word_token(&combined, "oyunlar")
+                || Self::contains_word_token(&combined, "oyunu")
+                || Self::contains_word_token(&combined, "oyunları")
+                || Self::contains_word_token(&combined, "steam")
+                || Self::contains_word_token(&combined, "playstation")
+                || Self::contains_word_token(&combined, "ps5")
+                || Self::contains_word_token(&combined, "xbox")
+                || Self::contains_word_token(&combined, "nintendo")
+                || Self::contains_word_token(&combined, "game")
+                || Self::contains_word_token(&combined, "gaming")
+                || Self::contains_word_token(&combined, "gameplay"));
+
+        if game_matched && !tags.iter().any(|t| t == "Oyun") {
             tags.push("Oyun".to_string());
         }
 
