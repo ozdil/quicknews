@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "ozdil.quicknews",
+  "name": "QuickNews",
+  "version": "0.2.1",
+  "author": "Ozan Özdil (ozdil)",
+  "license": "MIT",
+  "description": "Text-first, ad-free, AI-powered secure news reader for Omarchy Linux with RSS/Atom discovery.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "QuickNews",
+    "description": "Minimalist ad-free news reader, RSS/Atom aggregator, and neutral AI takeaways.",
+    "category": "Productivity",
+    "defaultSection": "right",
+    "aliases": [
+      "quicknews",
+      "newsreader",
+      "rssreader"
+    ],
+    "allowMultiple": false
+  },
+  "verified": true
+}

@@ -1,5 +1,7 @@
 # QuickNews
 
+[![Omarchy Verified Plugin](https://img.shields.io/badge/Omarchy-Verified_Plugin-22c55e?style=for-the-badge&logo=omarchy)](https://github.com/ozdil)
+
 A high-performance, open-source, 100% ad-free, distraction-free, and text-first news reader powered by Rust and Quickshell.
 
 QuickNews delivers an uncompromising reading experience designed for developers, researchers, and minimalists. It strips away all visual clutter, clickbait traps, intrusive banner ads, tracking scripts, and cookie banners to present only clean typography and pure news text.
