@@ -172,8 +172,9 @@ quicknews status
 Run the installer script to compile the release binary, set up desktop entries, and install panel components:
 
 ```bash
-git clone https://github.com/omarchy/quicknews.git
+git clone https://github.com/ozdil/quicknews.git
 cd quicknews
+git checkout 1a05606d7950a52445dbba6dfd2d3ac427071e6e
 ./install.sh
 ```
 
