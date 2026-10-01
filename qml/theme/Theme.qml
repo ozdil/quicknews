@@ -66,6 +66,9 @@ QtObject {
     readonly property string iconCheckCircle: "\uf058"
     readonly property string iconCircleOutline: "\uf111"
     readonly property string iconCircleDot: "\uf192"
+    readonly property string iconInfo: "\uf05a"
+    readonly property string iconShield: "\uf3ed"
+    readonly property string iconCoffee: "\uf0f4"
 
     // Filesystem Paths for Omarchy System Theme
     readonly property string homeDir: Quickshell.env("HOME")
@@ -129,6 +132,20 @@ QtObject {
         root.accentOrange = dict["orange"] || dict["color9"] || dict["color1"] || "#ff9e64";
         root.accentCyan = dict["bright_cyan"] || dict["cyan"] || dict["color6"] || "#7dcfff";
         root.accentRed = dict["red"] || dict["bright_red"] || dict["color1"] || "#f7768e";
+    }
+
+    function getCategoryColor(cat) {
+        if (!cat) return root.textMuted;
+        var c = String(cat).toLowerCase();
+        if (c.indexOf("linux") !== -1) return root.accentOrange;
+        if (c.indexOf("oyun") !== -1 || c.indexOf("gaming") !== -1) return root.accentPurple;
+        if (c.indexOf("guvenlik") !== -1 || c.indexOf("security") !== -1) return root.accentRed;
+        if (c.indexOf("donan") !== -1) return root.accentCyan;
+        if (c.indexOf("bilim") !== -1) return root.accentGreen;
+        if (c.indexOf("teknoloji") !== -1 || c.indexOf("yapay") !== -1 || c.indexOf("ai") !== -1) return root.accent;
+        if (c.indexOf("siyaset") !== -1 || c.indexOf("politika") !== -1) return root.textMuted;
+        if (c.indexOf("gundem") !== -1) return root.accent;
+        return root.accent;
     }
 
     // Inotify FileView on Omarchy colors.toml

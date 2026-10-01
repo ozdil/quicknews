@@ -15,6 +15,7 @@ Rectangle {
     signal categorySelected(string category)
     signal sourceSelected(string sourceId)
     signal openAddModal()
+    signal openInfoModal()
     signal refreshRequested()
     signal removeSourceRequested(string sourceId, string sourceName)
 
@@ -162,6 +163,30 @@ Rectangle {
                     cursorShape: Qt.PointingHandCursor
                     enabled: !root.isSyncing
                     onClicked: root.refreshRequested()
+                }
+            }
+
+            // Info / About Button
+            Rectangle {
+                width: 28
+                height: 28
+                radius: Theme.radiusSm
+                color: infoMouse.containsMouse ? Theme.bgCardHover : "transparent"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: Theme.iconInfo
+                    font.family: Theme.iconFont
+                    font.pixelSize: 13
+                    color: infoMouse.containsMouse ? Theme.accentCyan : Theme.textMuted
+                }
+
+                MouseArea {
+                    id: infoMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.openInfoModal()
                 }
             }
         }

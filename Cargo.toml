@@ -1,6 +1,6 @@
 [package]
 name = "quicknews"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Ozan Ozdil"]
 description = "Text-first, ad-free, AI-powered secure news reader for Omarchy Linux and cross-platform"

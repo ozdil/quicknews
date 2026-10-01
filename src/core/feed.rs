@@ -56,15 +56,36 @@ impl FeedParser {
             return Ok(base_url.to_string());
         }
 
-        // Parse HTML looking for <link rel="alternate" type="application/rss+xml" ...>
+        // Parse HTML looking for <link rel="alternate" type="application/rss+xml" ...> or <a> tag feeds
         let doc = Html::parse_document(&html_content);
-        if let Ok(sel) = Selector::parse("link[rel='alternate']") {
+        if let Ok(sel) = Selector::parse("link[rel='alternate'], link[rel='feed']") {
             for link in doc.select(&sel) {
                 let type_attr = link.value().attr("type").unwrap_or("").to_lowercase();
                 if type_attr.contains("rss") || type_attr.contains("atom") || type_attr.contains("xml") {
                     if let Some(href) = link.value().attr("href") {
                         if let Ok(resolved) = base_url.join(href) {
                             return Ok(resolved.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also check header/footer links with href containing /feed or /rss
+        if let Ok(sel_a) = Selector::parse("a[href*='rss'], a[href*='feed'], a[href*='.xml']") {
+            for a in doc.select(&sel_a) {
+                if let Some(href) = a.value().attr("href") {
+                    let h_low = href.to_lowercase();
+                    if (h_low.contains("/feed") || h_low.contains("/rss") || h_low.ends_with(".xml"))
+                        && !h_low.contains("feedback")
+                        && !h_low.contains("feedburner.google")
+                    {
+                        if let Ok(resolved) = base_url.join(href) {
+                            if let Ok(count) = Self::verify_feed_endpoint(resolved.as_str()).await {
+                                if count > 0 {
+                                    return Ok(resolved.to_string());
+                                }
+                            }
                         }
                     }
                 }
@@ -81,17 +102,21 @@ impl FeedParser {
             "rss",
             "feed/",
             "rss/",
-            "rss/news",
+            "index.xml",
+            "atom.xml",
             "rss.xml",
             "feed.xml",
-            "atom.xml",
-            "index.xml",
+            "?feed=rss2",
+            "feed/rss2",
+            "rss/news",
             "feeds",
+            "feeds/posts/default",
+            "api/feed",
         ];
 
         for path in &candidates {
             if let Ok(target) = base_url.join(path) {
-                if let Ok(content) = fetch_bounded_content(target.as_str(), 64 * 1024, 5).await {
+                if let Ok(content) = fetch_bounded_content(target.as_str(), 128 * 1024, 5).await {
                     let trimmed = content.trim();
                     let lower = trimmed.to_lowercase();
                     if !lower.starts_with("<!doctype html")

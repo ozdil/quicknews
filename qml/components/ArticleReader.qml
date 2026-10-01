@@ -371,11 +371,11 @@ Rectangle {
 
                 ColumnLayout {
                     id: readerCol
-                    width: Math.min(flickable.width - 48, 880)
+                    width: Math.min(flickable.width - 64, root.isZenMode ? 780 : 740)
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
-                    anchors.topMargin: 16
-                    spacing: 20
+                    anchors.topMargin: 20
+                    spacing: 22
 
                     // Article Title (Clean, Bold, Large)
                     Text {
@@ -439,24 +439,24 @@ Rectangle {
                                    root.fullCleanArticle.tags :
                                    (root.currentArticle && root.currentArticle.tags ? root.currentArticle.tags : [])
 
-                            Rectangle {
-                                id: rdrTagBadge
-                                height: 22
-                                width: rdrTagText.implicitWidth + 14
-                                radius: 4
-                                color: rdrTagMouse.containsMouse ? Theme.bgCardHover : Theme.bgSurface
-                                border.color: rdrTagMouse.containsMouse ? Theme.accentCyan : Theme.border
-                                border.width: 1
+                                Rectangle {
+                                    id: rdrTagBadge
+                                    height: 22
+                                    width: rdrTagText.implicitWidth + 14
+                                    radius: 4
+                                    color: rdrTagMouse.containsMouse ? Theme.bgCardHover : Qt.rgba(Theme.getCategoryColor(modelData).r, Theme.getCategoryColor(modelData).g, Theme.getCategoryColor(modelData).b, 0.12)
+                                    border.color: rdrTagMouse.containsMouse ? Theme.getCategoryColor(modelData) : Qt.rgba(Theme.getCategoryColor(modelData).r, Theme.getCategoryColor(modelData).g, Theme.getCategoryColor(modelData).b, 0.35)
+                                    border.width: 1
 
-                                Text {
-                                    id: rdrTagText
-                                    anchors.centerIn: parent
-                                    text: modelData
-                                    font.family: Theme.fontFamily
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                    color: rdrTagMouse.containsMouse ? Theme.accent : Theme.accentCyan
-                                }
+                                    Text {
+                                        id: rdrTagText
+                                        anchors.centerIn: parent
+                                        text: modelData
+                                        font.family: Theme.fontFamily
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                        color: rdrTagMouse.containsMouse ? Theme.accentHover : Theme.getCategoryColor(modelData)
+                                    }
 
                                 MouseArea {
                                     id: rdrTagMouse
@@ -478,8 +478,19 @@ Rectangle {
                         implicitHeight: aiSummaryCol.implicitHeight + 24
                         radius: Theme.radiusMd
                         color: Theme.bgCard
-                        border.color: Theme.accentPurple
+                        border.color: Qt.rgba(Theme.accentPurple.r, Theme.accentPurple.g, Theme.accentPurple.b, 0.4)
                         border.width: 1
+
+                        // Left accent highlight indicator
+                        Rectangle {
+                            width: 3
+                            height: parent.height - 16
+                            radius: 2
+                            anchors.left: parent.left
+                            anchors.leftMargin: 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: Theme.accentPurple
+                        }
 
                         ColumnLayout {
                             id: aiSummaryCol

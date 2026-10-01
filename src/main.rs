@@ -160,16 +160,48 @@ async fn main() {
             }
         }
         "add-source" => {
-            let filtered: Vec<&str> = args.iter().skip(2).filter(|a| *a != "--").map(|s| s.as_str()).collect();
-            if filtered.len() < 4 {
-                eprintln!("Kullanim: quicknews-engine add-source <Isim> <Domain> <FeedURL> <Kategori>");
+            let is_json = args.iter().any(|a| a == "--json");
+            let filtered: Vec<&str> = args.iter().skip(2).filter(|a| *a != "--" && *a != "--json").map(|s| s.as_str()).collect();
+            if filtered.len() < 3 {
+                eprintln!("Kullanim: quicknews-engine add-source <Isim> <Domain veya FeedURL> <Kategori> [FeedURL]");
                 std::process::exit(1);
             }
-            match app.add_source_verified(filtered[0], filtered[1], filtered[2], filtered[3]).await {
-                Ok(true) => println!("Kaynak basariyla dogrulandi ve eklendi."),
-                Ok(false) => println!("Bu kaynak zaten mevcut."),
+            let name = filtered[0];
+            let domain_or_url = filtered[1];
+            let category = filtered[2];
+            let feed_url = if filtered.len() >= 4 { filtered[3] } else { domain_or_url };
+
+            // Extract clean domain
+            let domain = if domain_or_url.starts_with("http://") || domain_or_url.starts_with("https://") {
+                url::Url::parse(domain_or_url)
+                    .ok()
+                    .and_then(|u| u.host_str().map(|h| h.trim_start_matches("www.").to_string()))
+                    .unwrap_or_else(|| domain_or_url.to_string())
+            } else {
+                domain_or_url.trim_start_matches("www.").to_string()
+            };
+
+            match app.add_source_verified(name, &domain, feed_url, category).await {
+                Ok(true) => {
+                    if is_json {
+                        println!("{}", serde_json::json!({ "success": true, "message": "Kaynak basariyla dogrulandi ve eklendi." }));
+                    } else {
+                        println!("Kaynak basariyla dogrulandi ve eklendi.");
+                    }
+                }
+                Ok(false) => {
+                    if is_json {
+                        println!("{}", serde_json::json!({ "success": false, "message": "Bu kaynak zaten mevcut." }));
+                    } else {
+                        println!("Bu kaynak zaten mevcut.");
+                    }
+                }
                 Err(e) => {
-                    eprintln!("Kaynak ekleme hatasi: {}", e);
+                    if is_json {
+                        println!("{}", serde_json::json!({ "success": false, "error": e.to_string() }));
+                    } else {
+                        eprintln!("Kaynak ekleme hatasi: {}", e);
+                    }
                     std::process::exit(1);
                 }
             }

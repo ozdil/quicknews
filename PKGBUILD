@@ -1,6 +1,6 @@
 # Maintainer: Ozan Ozdil
 pkgname=quicknews
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc="Guvenli, reklamsiz, resimsiz ve yapay zeka destekli minimalist haber okuyucu"
 arch=('x86_64' 'aarch64')

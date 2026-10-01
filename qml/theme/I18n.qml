@@ -82,6 +82,7 @@ QtObject {
         "tab_saved": { "en": "Saved", "tr": "Kaydedilenler" },
         "no_articles": { "en": "No articles in this feed", "tr": "Bu akista haber bulunamadi" },
         "sync_now": { "en": "Sync Feeds (R)", "tr": "Akislari Guncelle (R)" },
+        "syncing_news": { "en": "Fetching latest news...", "tr": "Yeni haberler aliniyor..." },
         "just_now": { "en": "just now", "tr": "az once" },
         "hours_ago": { "en": "hours ago", "tr": "saat once" },
         "yesterday": { "en": "yesterday", "tr": "dun" },
@@ -94,7 +95,26 @@ QtObject {
         "modal_cancel": { "en": "Cancel (Esc)", "tr": "Vazgec (Esc)" },
         "modal_submit": { "en": "Search and Add", "tr": "Ara ve Ekle" },
         "modal_success": { "en": "Successfully added new sources!", "tr": "Yeni kaynaklar basariyla eklendi!" },
-        "modal_controlled": { "en": "Sources checked.", "tr": "Kaynaklar kontrol edildi." }
+        "modal_controlled": { "en": "Sources checked.", "tr": "Kaynaklar kontrol edildi." },
+        "tab_ai_add": { "en": "AI Auto-Discover", "tr": "Yapay Zeka ile Kesfet" },
+        "tab_manual_add": { "en": "Manual Add", "tr": "Manuel Ekle" },
+        "manual_name_label": { "en": "Source Name (e.g. AnandTech, Webtekno)", "tr": "Kaynak Adi (Orn: AnandTech, Webtekno)" },
+        "manual_url_label": { "en": "Website URL or Feed Link (https://...)", "tr": "Site Adresi veya RSS Linki (https://...)" },
+        "manual_category_label": { "en": "Category", "tr": "Kategori" },
+        "manual_submit_btn": { "en": "Verify & Add Source", "tr": "Dogrula ve Kaynagi Ekle" },
+
+        // Info / About Modal
+        "info_title": { "en": "About QuickNews", "tr": "QuickNews Hakkında" },
+        "info_subtitle": { "en": "Distraction-free, secure and AI-assisted news reader for Omarchy Linux", "tr": "Omarchy Linux için reklamsız, güvenli ve yapay zeka destekli haber okuyucu" },
+        "info_version": { "en": "Version", "tr": "Sürüm" },
+        "info_architecture": { "en": "Architecture", "tr": "Mimari" },
+        "info_arch_desc": { "en": "Dual-engine architecture: Rust native daemon backend + Quickshell GPU frontend", "tr": "Çift motorlu mimari: Rust yerel servis arka ucu + Quickshell GPU ön yüzü" },
+        "info_security": { "en": "Security & Privacy", "tr": "Güvenlik ve Gizlilik" },
+        "info_security_desc": { "en": "Zero trackers, zero ads, strict SSRF IPv4/IPv6 private IP protection, memory cap and symlink rejection", "tr": "Sıfır izleyici, sıfır reklam, katı SSRF koruması, 1 MiB bellek tavanı ve sembolik bağ denetimi" },
+        "info_shortcuts": { "en": "Keyboard Shortcuts", "tr": "Klavye Kısayolları" },
+        "info_support": { "en": "Support Development", "tr": "Geliştirmeyi Destekle" },
+        "info_bmac": { "en": "Buy Me a Coffee", "tr": "Bir Kahve Ismarla" },
+        "info_close": { "en": "Close (Esc)", "tr": "Kapat (Esc)" }
     })
 
     function t(key) {

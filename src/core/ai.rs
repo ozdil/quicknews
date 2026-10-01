@@ -845,18 +845,20 @@ impl AiEngine {
     }
 
     async fn query_gemini_for_sources(prompt: &str, api_key: &str) -> Result<Vec<DiscoveredSource>, String> {
-        let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+        // Try gemini-2.0-flash first, fallback to gemini-1.5-flash
+        let models = ["gemini-2.0-flash", "gemini-1.5-flash"];
 
-        let system_instruction = "Sen bir haber kaynagi kesif motorusun. Kullanicinin teknoloji, siyaset, gundem, yerel, ekonomi veya bilim isteklerini analiz et. Belirtilen alanla ilgili en yuksek kaliteli haber sitelerinin adini, alan adini, RSS akisini (varsa) ve kategorisini (orn: Gundem, Siyaset, Yerel, Teknoloji, Bilim, Ekonomi) dondur. Sadece gecerli bir JSON dizisi dondur: [{\"name\":\"...\",\"domain\":\"...\",\"suggested_feed\":\"...\",\"category\":\"...\"}]";
+        let system_instruction = "Sen profesyonel bir haber ve medya kesif motorusun. Kullanicinin dogal dildeki isteklerini analiz et. Belirtilen konu, sehir veya sektorle ilgili en guvenilir, aktif yayin yapan haber ve blog sitelerini tespit et. Her site icin:\n1. 'name': Sitenin resmi yayin adi (orn: Webtekno, ShiftDelete, Gazete Duvar, AnandTech).\n2. 'domain': Sitenin ana alan adi (orn: webtekno.com, shiftdelete.net, gazeteduvar.com.tr).\n3. 'suggested_feed': Sitenin gercek RSS veya Atom besleme URL'si (orn: https://www.webtekno.com/rss.xml, https://shiftdelete.net/feed). Bilinmiyorsa ana sayfa URL'si (orn: https://domain.com).\n4. 'category': Su standart kategorilerden biri: 'Gundem', 'Siyaset', 'Yerel', 'Teknoloji', 'Linux', 'Oyun', 'Donanim', 'Bilim', 'Siber Guvenlik', 'Girisimcilik', 'Ekonomi'.\n\nSadece gecerli bir JSON dizisi dondur, baska hicbir metin ekleme:\n[{\"name\":\"...\",\"domain\":\"...\",\"suggested_feed\":\"...\",\"category\":\"...\"}]";
 
         let payload = serde_json::json!({
             "contents": [{
                 "parts": [{
-                    "text": format!("{}\n\nKullanici Istegi: {}", system_instruction, prompt)
+                    "text": format!("{}\n\nKullanici Istegi: {}\nEn az 3, en fazla 8 yuksek kaliteli kaynak listele.", system_instruction, prompt)
                 }]
             }],
             "generationConfig": {
-                "response_mime_type": "application/json"
+                "response_mime_type": "application/json",
+                "temperature": 0.2
             }
         });
 
@@ -866,22 +868,41 @@ impl AiEngine {
             .build()
             .map_err(|e| e.to_string())?;
 
-        let res = client
-            .post(url)
-            .header("x-goog-api-key", api_key.trim())
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
+        for model in &models {
+            let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent", model);
+            let res = client
+                .post(&url)
+                .header("x-goog-api-key", api_key.trim())
+                .json(&payload)
+                .send()
+                .await;
 
-        let json_body: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
-        if let Some(text) = json_body["candidates"][0]["content"]["parts"][0]["text"].as_str() {
-            if let Ok(parsed) = serde_json::from_str::<Vec<DiscoveredSource>>(text) {
-                return Ok(parsed);
+            if let Ok(resp) = res {
+                if resp.status().is_success() {
+                    if let Ok(json_body) = resp.json::<serde_json::Value>().await {
+                        if let Some(text) = json_body["candidates"][0]["content"]["parts"][0]["text"].as_str() {
+                            let clean_text = text.trim();
+                            // Handle cases where markdown code block wraps JSON
+                            let json_str = if clean_text.starts_with("```json") {
+                                clean_text.trim_start_matches("```json").trim_end_matches("```").trim()
+                            } else if clean_text.starts_with("```") {
+                                clean_text.trim_start_matches("```").trim_end_matches("```").trim()
+                            } else {
+                                clean_text
+                            };
+
+                            if let Ok(parsed) = serde_json::from_str::<Vec<DiscoveredSource>>(json_str) {
+                                if !parsed.is_empty() {
+                                    return Ok(parsed);
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        Err("Gemini yaniti ayrilamadi".to_string())
+        Err("Gemini kaynak kesfi gerceklestirilemedi".to_string())
     }
 
     async fn query_gemini_summary(
@@ -1791,6 +1812,37 @@ fn score_curated_entry(entry: &CuratedEntry, tokens: &[&str], q_norm: &str) -> u
             && entry.category == "Yerel"
         {
             score += 40;
+        }
+        if (tok == "teknoloji" || tok == "tech" || tok == "bilisim" || tok == "dijital")
+            && (entry.tags.contains(&"teknoloji") || entry.tags.contains(&"tech") || entry.category == "Teknoloji")
+        {
+            score += 35;
+        }
+        if (tok == "donanim" || tok == "hardware" || tok == "gpu" || tok == "cpu" || tok == "benchmark")
+            && (entry.tags.contains(&"donanim") || entry.tags.contains(&"hardware") || entry.category.contains("Donanim"))
+        {
+            score += 35;
+        }
+        if (tok == "bilim" || tok == "science" || tok == "uzay" || tok == "fizik" || tok == "biyoloji" || tok == "evrim")
+            && (entry.tags.contains(&"bilim") || entry.tags.contains(&"science") || entry.category == "Bilim")
+        {
+            score += 40;
+        }
+        if (tok == "ekonomi" || tok == "finans" || tok == "borsa" || tok == "finance" || tok == "para")
+            && (entry.tags.contains(&"ekonomi") || entry.category == "Ekonomi")
+        {
+            score += 40;
+        }
+        if (tok == "girisim" || tok == "startup" || tok == "yatirim" || tok == "fon")
+            && (entry.tags.contains(&"girisim") || entry.tags.contains(&"startup") || entry.category == "Girisimcilik")
+        {
+            score += 40;
+        }
+
+        // City names (Ankara, Izmir, Istanbul, Bursa, Antalya, etc.)
+        let cities = ["izmir", "ankara", "istanbul", "bursa", "antalya", "adana", "konya", "trabzon", "eskisehir", "gaziantep", "kayseri", "samsun", "diyarbakir", "kastamonu"];
+        if cities.contains(&tok) && (entry.tags.contains(&tok) || name_low.contains(tok) || dom_low.contains(tok)) {
+            score += 60;
         }
     }
 

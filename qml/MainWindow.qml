@@ -20,6 +20,7 @@ Rectangle {
     property bool isAddingPrompt: false
     property string promptStatus: ""
     property bool showAddModal: false
+    property bool showInfoModal: false
     property bool isZenMode: false
     property string articlesBuffer: ""
     property string readBuffer: ""
@@ -51,6 +52,7 @@ Rectangle {
         loadSources();
         loadArticles();
         loadSavedArticles();
+        syncFeeds();
     }
 
     function loadSources() {
@@ -170,6 +172,14 @@ Rectangle {
         addPromptProc.running = true;
     }
 
+    function submitManualAdd(name, url, category) {
+        root.isAddingPrompt = true;
+        root.promptBuffer = "";
+        root.promptStatus = (I18n.currentLanguage === "en") ? "Validating and adding feed..." : "Akis dogrulaniyor ve ekleniyor...";
+        addSourceProc.command = [root.engineBin, "add-source", "--", name, url, category, "--json"];
+        addSourceProc.running = true;
+    }
+
     function removeSource(idOrDomain) {
         if (!idOrDomain) return;
 
@@ -208,6 +218,14 @@ Rectangle {
 
     // Keyboard navigation and shortcuts
     Keys.onPressed: function(event) {
+        if (root.showInfoModal) {
+            if (event.key === Qt.Key_Escape || event.key === Qt.Key_Question) {
+                root.showInfoModal = false;
+                event.accepted = true;
+            }
+            return;
+        }
+
         if (root.showAddModal) {
             if (event.key === Qt.Key_Escape) {
                 root.showAddModal = false;
@@ -245,6 +263,9 @@ Rectangle {
             event.accepted = true;
         } else if (event.key === Qt.Key_Slash) {
             headlineList.focusSearch();
+            event.accepted = true;
+        } else if (event.key === Qt.Key_Question) {
+            root.showInfoModal = !root.showInfoModal;
             event.accepted = true;
         } else if (event.key === Qt.Key_Escape) {
             if (root.isZenMode) {
@@ -323,6 +344,9 @@ Rectangle {
                 root.showAddModal = true;
                 root.promptStatus = "";
             }
+            onOpenInfoModal: {
+                root.showInfoModal = true;
+            }
             onRefreshRequested: {
                 root.syncFeeds();
             }
@@ -340,6 +364,7 @@ Rectangle {
             Layout.minimumWidth: root.isZenMode ? 0 : 320
             articles: root.articlesList
             savedArticles: root.savedArticlesList
+            isSyncing: root.isSyncing
             selectedArticleId: root.selectedArticle ? root.selectedArticle.id : ""
             onArticleSelected: function(art) {
                 root.loadArticleContent(art);
@@ -395,7 +420,7 @@ Rectangle {
         }
     }
 
-    // Add Source Natural Language Modal
+    // Add Source Natural Language and Manual Modal
     AddSourceModal {
         anchors.fill: parent
         visible: root.showAddModal
@@ -406,6 +431,19 @@ Rectangle {
         }
         onPromptSubmitted: function(p) {
             root.submitPromptAdd(p);
+        }
+        onManualSourceSubmitted: function(name, url, category) {
+            root.submitManualAdd(name, url, category);
+        }
+    }
+
+    // Standard QuickNews Info / About Modal
+    InfoModal {
+        anchors.fill: parent
+        visible: root.showInfoModal
+        appVersion: "v0.2.1"
+        onCloseRequested: {
+            root.showInfoModal = false;
         }
     }
 
@@ -552,6 +590,44 @@ Rectangle {
             } catch(e) {
                 root.promptStatus = (I18n.currentLanguage === "en") ? "Sources updated." : "Kaynaklar guncellendi.";
                 root.loadSources();
+            }
+            root.promptBuffer = "";
+        }
+    }
+
+    Process {
+        id: addSourceProc
+        stdout: SplitParser {
+            onRead: function(data) {
+                root.promptBuffer += data;
+            }
+        }
+        onExited: function(exitCode) {
+            root.isAddingPrompt = false;
+            try {
+                if (root.promptBuffer.trim().length > 0) {
+                    var added = JSON.parse(root.promptBuffer);
+                    if (added && (added.name || added.domain || added.feed_url)) {
+                        root.promptStatus = (I18n.currentLanguage === "en") ? ("Successfully added source: " + (added.name || added.domain)) : ("Kaynak basariyla eklendi: " + (added.name || added.domain));
+                        root.loadSources();
+                        root.syncFeeds();
+                    } else if (added && added.error) {
+                        root.promptStatus = (I18n.currentLanguage === "en") ? ("Error: " + added.error) : ("Hata: " + added.error);
+                        root.loadSources();
+                    } else {
+                        root.promptStatus = (I18n.currentLanguage === "en") ? "Source added successfully." : "Kaynak basariyla eklendi.";
+                        root.loadSources();
+                        root.syncFeeds();
+                    }
+                } else {
+                    root.promptStatus = (exitCode === 0) ? ((I18n.currentLanguage === "en") ? "Source added successfully." : "Kaynak basariyla eklendi.") : ((I18n.currentLanguage === "en") ? "Failed to verify or add feed." : "Akis dogrulanamadi veya eklenemedi.");
+                    root.loadSources();
+                    if (exitCode === 0) root.syncFeeds();
+                }
+            } catch(e) {
+                root.promptStatus = (exitCode === 0) ? ((I18n.currentLanguage === "en") ? "Source added successfully." : "Kaynak basariyla eklendi.") : ((I18n.currentLanguage === "en") ? "Failed to verify or add feed." : "Akis dogrulanamadi veya eklenemedi.");
+                root.loadSources();
+                if (exitCode === 0) root.syncFeeds();
             }
             root.promptBuffer = "";
         }

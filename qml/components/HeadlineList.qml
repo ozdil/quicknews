@@ -14,6 +14,7 @@ Rectangle {
     property string searchQuery: ""
     property string statusFilter: "Okunmamış"
     property string timeFilter: "Tümü"
+    property bool isSyncing: false
     readonly property bool isSearchFocused: searchInput.activeFocus
 
     readonly property int unreadCount: {
@@ -322,6 +323,46 @@ Rectangle {
             Item { Layout.fillWidth: true }
         }
 
+        // Syncing notification banner
+        Rectangle {
+            visible: root.isSyncing
+            Layout.fillWidth: true
+            height: 28
+            radius: Theme.radiusSm
+            color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.15)
+            border.color: Theme.accent
+            border.width: 1
+
+            RowLayout {
+                anchors.centerIn: parent
+                spacing: 8
+
+                Text {
+                    id: syncIcon
+                    text: Theme.iconRefresh
+                    font.family: Theme.iconFont
+                    font.pixelSize: 11
+                    color: Theme.accent
+                    
+                    NumberAnimation on rotation {
+                        running: root.isSyncing
+                        from: 0
+                        to: 360
+                        loops: Animation.Infinite
+                        duration: 1000
+                    }
+                }
+
+                Text {
+                    text: I18n.t("syncing_news")
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 11
+                    font.bold: true
+                    color: Theme.accent
+                }
+            }
+        }
+
         // Article count header
         RowLayout {
             Layout.fillWidth: true
@@ -440,11 +481,24 @@ Rectangle {
 
                             Item { Layout.fillWidth: true }
 
-                            Text {
-                                text: modelData.category
-                                font.family: Theme.fontFamily
-                                font.pixelSize: 9
-                                color: Theme.textMuted
+                            Rectangle {
+                                visible: modelData.category && modelData.category.length > 0
+                                height: 16
+                                width: catText.implicitWidth + 8
+                                radius: 3
+                                color: Qt.rgba(Theme.getCategoryColor(modelData.category).r, Theme.getCategoryColor(modelData.category).g, Theme.getCategoryColor(modelData.category).b, 0.15)
+                                border.color: Qt.rgba(Theme.getCategoryColor(modelData.category).r, Theme.getCategoryColor(modelData.category).g, Theme.getCategoryColor(modelData.category).b, 0.4)
+                                border.width: 1
+
+                                Text {
+                                    id: catText
+                                    anchors.centerIn: parent
+                                    text: modelData.category
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: 9
+                                    font.bold: true
+                                    color: Theme.getCategoryColor(modelData.category)
+                                }
                             }
                         }
 
