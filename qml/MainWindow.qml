@@ -441,7 +441,7 @@ Rectangle {
     InfoModal {
         anchors.fill: parent
         visible: root.showInfoModal
-        appVersion: "v0.2.1"
+        appVersion: "v0.2.2"
         onCloseRequested: {
             root.showInfoModal = false;
         }

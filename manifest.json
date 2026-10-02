@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "ozdil.quicknews",
   "name": "QuickNews",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "Ozan Özdil (ozdil)",
   "license": "MIT",
   "description": "Text-first, ad-free, AI-powered secure news reader for Omarchy Linux with RSS/Atom discovery.",

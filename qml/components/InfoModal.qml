@@ -1,12 +1,59 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import Quickshell
+import Quickshell.Io
 import "../theme"
 
 Rectangle {
     id: root
 
-    property string appVersion: "v0.2.0"
+    readonly property string manifestPath: Qt.resolvedUrl("../../manifest.json").toString().replace(/^file:\/\//, "")
+    readonly property string manifestFallbackPath: (Quickshell.env("HOME") || "/home/ozdil") + "/.config/omarchy/plugins/ozdil.quicknews/manifest.json"
+
+    property string pluginName: "QuickNews"
+    property string appVersion: "v0.2.2"
+    property string pluginDescription: "Text-first, ad-free, AI-powered secure news reader for Omarchy Linux with RSS/Atom discovery."
+    property string pluginAuthor: "Ozan Özdil (ozdil)"
+    property string pluginLicense: "MIT"
+    property bool pluginVerified: true
+
+    function loadManifest(rawJson) {
+        try {
+            if (!rawJson || String(rawJson).trim() === "") return;
+            var parsed = JSON.parse(rawJson);
+            if (parsed.name) root.pluginName = parsed.name;
+            if (parsed.version) root.appVersion = "v" + parsed.version.replace(/^v/, "");
+            if (parsed.description) root.pluginDescription = parsed.description;
+            if (parsed.author) root.pluginAuthor = parsed.author;
+            if (parsed.license) root.pluginLicense = parsed.license;
+            if (parsed.verified !== undefined) root.pluginVerified = Boolean(parsed.verified);
+        } catch(e) {}
+    }
+
+    FileView {
+        id: manifestWatcher
+        path: root.manifestPath
+        watchChanges: true
+        atomicWrites: true
+        printErrors: false
+        onLoaded: root.loadManifest(text())
+        onLoadFailed: {
+            manifestFallbackWatcher.reload();
+        }
+        onFileChanged: reload()
+    }
+
+    FileView {
+        id: manifestFallbackWatcher
+        path: root.manifestFallbackPath
+        watchChanges: true
+        atomicWrites: true
+        printErrors: false
+        onLoaded: root.loadManifest(text())
+        onFileChanged: reload()
+    }
+
     signal closeRequested()
 
     color: Qt.rgba(0, 0, 0, 0.70)
@@ -66,11 +113,42 @@ Rectangle {
                         spacing: 8
 
                         Text {
-                            text: I18n.t("info_title")
+                            text: root.pluginName
                             font.family: Theme.fontFamily
                             font.pixelSize: 16
                             font.bold: true
                             color: Theme.textMain
+                        }
+
+                        Rectangle {
+                            visible: root.pluginVerified
+                            height: 18
+                            width: verifiedRow.implicitWidth + 8
+                            radius: 4
+                            color: Qt.rgba(0.13, 0.77, 0.37, 0.18)
+                            border.color: "#22c55e"
+                            border.width: 1
+
+                            RowLayout {
+                                id: verifiedRow
+                                anchors.centerIn: parent
+                                spacing: 3
+
+                                Text {
+                                    text: "󰄬"
+                                    color: "#22c55e"
+                                    font.family: Theme.iconFont
+                                    font.pixelSize: 10
+                                }
+
+                                Text {
+                                    text: "VERIFIED"
+                                    color: "#22c55e"
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: 9
+                                    font.bold: true
+                                }
+                            }
                         }
 
                         Rectangle {
