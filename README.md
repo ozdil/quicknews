@@ -174,7 +174,7 @@ Run the installer script to compile the release binary, set up desktop entries, 
 ```bash
 git clone https://github.com/ozdil/quicknews.git
 cd quicknews
-git checkout 1a05606d7950a52445dbba6dfd2d3ac427071e6e
+git checkout 1bacb2a2cb2b21c0019eddd947d594906c5ab583
 ./install.sh
 ```
 

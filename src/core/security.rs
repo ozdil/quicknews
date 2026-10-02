@@ -281,15 +281,13 @@ pub fn validate_url_ssrf(raw_url: &str) -> Result<Url, SecurityError> {
     Ok(url)
 }
 
-/// Fetches web content over HTTP/HTTPS with hard bounded buffer, SSRF guard, and DNS Rebinding defense.
-pub async fn fetch_bounded_content(
-    url_str: &str,
-    max_bytes: usize,
+/// Builds a reqwest Client with DNS-pinned resolved addresses and automatic redirects disabled.
+/// Each hop in a redirect chain must be separately validated and pinned.
+fn build_pinned_client(
+    host_str: &str,
+    resolved_addrs: &[std::net::SocketAddr],
     timeout_secs: u64,
-) -> Result<String, SecurityError> {
-    let (validated_url, resolved_addrs) = validate_url_ssrf_and_resolve(url_str)?;
-    let host_str = validated_url.host_str().unwrap_or("").to_string();
-
+) -> Result<reqwest::Client, SecurityError> {
     let mut default_headers = reqwest::header::HeaderMap::new();
     default_headers.insert(
         reqwest::header::ACCEPT,
@@ -302,27 +300,6 @@ pub async fn fetch_bounded_content(
         reqwest::header::HeaderValue::from_static("tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"),
     );
 
-    let mut client_builder = reqwest::Client::builder()
-        .timeout(Duration::from_secs(timeout_secs))
-        .connect_timeout(Duration::from_secs(5))
-        .default_headers(default_headers)
-        .redirect(reqwest::redirect::Policy::custom(|attempt| {
-            if attempt.previous().len() >= 5 {
-                attempt.error("Cok fazla yonlendirme (yonlendirme dongusu)")
-            } else {
-                let target = attempt.url();
-                if let Err(e) = validate_url_ssrf(target.as_str()) {
-                    attempt.error(format!("Yonlendirme SSRF engeline takildi: {}", e))
-                } else {
-                    attempt.follow()
-                }
-            }
-        }))
-        .gzip(true)
-        .brotli(true)
-        .deflate(true)
-        .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
-
     // Pin resolved verified public IP addresses to prevent DNS Rebinding (TOCTOU attacks)
     // Filter to IPv4 addresses if available to prevent unreachable IPv6 route failures
     let preferred_addrs: Vec<std::net::SocketAddr> = {
@@ -330,27 +307,98 @@ pub async fn fetch_bounded_content(
         if !v4.is_empty() {
             v4
         } else {
-            resolved_addrs
+            resolved_addrs.to_vec()
         }
     };
-    client_builder = client_builder.resolve_to_addrs(&host_str, &preferred_addrs);
 
-    let client = client_builder
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(timeout_secs))
+        .connect_timeout(Duration::from_secs(5))
+        .default_headers(default_headers)
+        // Disable automatic redirects: each hop is manually validated with full DNS re-resolution
+        .redirect(reqwest::redirect::Policy::none())
+        .gzip(true)
+        .brotli(true)
+        .deflate(true)
+        .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36")
+        .resolve_to_addrs(host_str, &preferred_addrs)
         .build()
         .map_err(|e| SecurityError::Network(e.to_string()))?;
 
-    let mut response = client
-        .get(validated_url)
-        .send()
-        .await
-        .map_err(|e| SecurityError::Network(e.to_string()))?;
+    Ok(client)
+}
 
-    if !response.status().is_success() {
-        return Err(SecurityError::Network(format!(
-            "HTTP Hatasi: {}",
-            response.status()
-        )));
-    }
+/// Maximum number of redirect hops allowed per fetch operation.
+const MAX_REDIRECT_HOPS: usize = 5;
+
+/// Fetches web content over HTTP/HTTPS with hard bounded buffer, SSRF guard, and DNS Rebinding defense.
+/// Redirect hops are handled manually: each hop undergoes full SSRF validation with fresh DNS
+/// resolution and IP pinning, eliminating the TOCTOU window that automatic redirect following creates.
+pub async fn fetch_bounded_content(
+    url_str: &str,
+    max_bytes: usize,
+    timeout_secs: u64,
+) -> Result<String, SecurityError> {
+    let (mut current_url, mut resolved_addrs) = validate_url_ssrf_and_resolve(url_str)?;
+    let mut current_host = current_url.host_str().unwrap_or("").to_string();
+
+    let mut hops = 0usize;
+
+    let response = loop {
+        let client = build_pinned_client(&current_host, &resolved_addrs, timeout_secs)?;
+
+        let resp = client
+            .get(current_url.clone())
+            .send()
+            .await
+            .map_err(|e| SecurityError::Network(e.to_string()))?;
+
+        let status = resp.status();
+
+        if status.is_redirection() {
+            hops += 1;
+            if hops > MAX_REDIRECT_HOPS {
+                return Err(SecurityError::Network(
+                    "Cok fazla yonlendirme (yonlendirme dongusu)".to_string(),
+                ));
+            }
+
+            let location = resp
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| {
+                    SecurityError::Network("Yonlendirme basliginda Location alani bulunamadi".to_string())
+                })?
+                .to_string();
+
+            // Resolve relative redirect URLs against the current URL
+            let redirect_url_str = if location.starts_with("http://") || location.starts_with("https://") {
+                location
+            } else {
+                current_url
+                    .join(&location)
+                    .map_err(|e| SecurityError::Network(format!("Yonlendirme URL'si ayristirilamadi: {}", e)))?
+                    .to_string()
+            };
+
+            // Full SSRF validation with fresh DNS resolution and IP pinning for each redirect hop
+            let (validated_redirect, redirect_addrs) = validate_url_ssrf_and_resolve(&redirect_url_str)?;
+            current_host = validated_redirect.host_str().unwrap_or("").to_string();
+            current_url = validated_redirect;
+            resolved_addrs = redirect_addrs;
+            continue;
+        }
+
+        if !status.is_success() {
+            return Err(SecurityError::Network(format!(
+                "HTTP Hatasi: {}",
+                status
+            )));
+        }
+
+        break resp;
+    };
 
     // MIME type check: Reject non-text/binary payloads early (audio, video, archives, executables)
     if let Some(content_type_header) = response.headers().get(reqwest::header::CONTENT_TYPE) {
