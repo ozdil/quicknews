@@ -344,7 +344,7 @@ pub async fn fetch_bounded_content(
 
     let mut hops = 0usize;
 
-    let response = loop {
+    let mut response = loop {
         let client = build_pinned_client(&current_host, &resolved_addrs, timeout_secs)?;
 
         let resp = client
