@@ -394,9 +394,11 @@ fn test_storage_add_source_sanitization() {
 
 #[test]
 fn test_strip_markdown_images_beacon_filter() {
-    let input = "Bu haber metnidir. ![Takip Pikseli](https://tracker.analytics.com/beacon.gif) Burada baska bir paragraf var. ![banner](https://ads.com/ad.jpg?user=123) Sonuc metni.";
+    let input = "Bu haber metnidir. ![Takip Pikseli](https://tracker.analytics.com/beacon.gif) Burada baska bir paragraf var. <img src=\"http://127.0.0.1:8080/beacon.png\" alt=\"tracker\" /> ![banner](https://ads.com/ad.jpg?user=123) Sonuc metni.";
     let stripped = AdBlocker::strip_markdown_images(input);
     assert!(!stripped.contains("https://tracker.analytics.com/beacon.gif"));
+    assert!(!stripped.contains("http://127.0.0.1:8080/beacon.png"));
+    assert!(!stripped.contains("<img"));
     assert!(!stripped.contains("https://ads.com/ad.jpg"));
     assert!(stripped.contains("Bu haber metnidir."));
     assert!(stripped.contains("Burada baska bir paragraf var."));

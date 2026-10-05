@@ -38,7 +38,7 @@ impl AdBlocker {
         )
     }
 
-    /// Strips markdown image syntax ![alt](url) to eliminate tracking pixels and web beacons.
+    /// Strips markdown image syntax ![alt](url) and HTML image tags <img ...> to eliminate tracking pixels and web beacons.
     pub fn strip_markdown_images(text: &str) -> String {
         let mut result = String::with_capacity(text.len());
         let mut chars = text.chars().peekable();
@@ -57,6 +57,27 @@ impl AdBlocker {
                             break;
                         }
                     }
+                }
+            } else if ch == '<' {
+                let mut tag_buf = String::new();
+                let mut is_img = false;
+                while let Some(&next_c) = chars.peek() {
+                    if next_c == '>' {
+                        chars.next();
+                        break;
+                    }
+                    let c = chars.next().unwrap();
+                    tag_buf.push(c);
+                    let lower = tag_buf.to_lowercase();
+                    let trimmed = lower.trim_start();
+                    if trimmed.starts_with("img") || trimmed.starts_with("image") {
+                        is_img = true;
+                    }
+                }
+                if !is_img {
+                    result.push('<');
+                    result.push_str(&tag_buf);
+                    result.push('>');
                 }
             } else {
                 result.push(ch);

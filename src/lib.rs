@@ -135,7 +135,7 @@ impl QuickNewsApp {
 
         // AI processes 100% of the stitched article text: structures paragraphs, preserves lists, strips clutter
         let ai_structured_text = AiEngine::clean_full_article_content(&article.title, &article.content_text).await;
-        article.content_text = ai_structured_text;
+        article.content_text = crate::core::adblock::AdBlocker::strip_markdown_images(&ai_structured_text);
         let word_count = article.content_text.split_whitespace().count();
         article.word_count = word_count;
         article.reading_time_mins = if word_count == 0 { 1 } else { word_count.div_ceil(200) };

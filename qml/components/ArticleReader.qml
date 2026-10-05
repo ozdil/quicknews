@@ -387,6 +387,7 @@ Rectangle {
                         lineHeightMode: Text.ProportionalHeight
                         color: Theme.textMain
                         wrapMode: Text.WordWrap
+                        textFormat: Text.PlainText
                         Layout.fillWidth: true
                     }
 
@@ -401,6 +402,7 @@ Rectangle {
                             font.pixelSize: 12
                             font.bold: true
                             color: Theme.accent
+                            textFormat: Text.PlainText
                         }
 
                         Text {
@@ -409,6 +411,7 @@ Rectangle {
                             font.family: Theme.fontFamily
                             font.pixelSize: 11
                             color: Theme.textMuted
+                            textFormat: Text.PlainText
                         }
 
                         Text {
@@ -417,6 +420,7 @@ Rectangle {
                             font.family: Theme.fontFamily
                             font.pixelSize: 11
                             color: Theme.textDim
+                            textFormat: Text.PlainText
                         }
 
                         Text {
@@ -424,6 +428,7 @@ Rectangle {
                             font.family: Theme.fontFamily
                             font.pixelSize: 11
                             color: Theme.accentGreen
+                            textFormat: Text.PlainText
                         }
                     }
 
@@ -456,6 +461,7 @@ Rectangle {
                                         font.pixelSize: 10
                                         font.bold: true
                                         color: rdrTagMouse.containsMouse ? Theme.accentHover : Theme.getCategoryColor(modelData)
+                                        textFormat: Text.PlainText
                                     }
 
                                 MouseArea {
@@ -528,6 +534,7 @@ Rectangle {
                                 font.bold: true
                                 color: Theme.textMain
                                 wrapMode: Text.WordWrap
+                                textFormat: Text.PlainText
                                 Layout.fillWidth: true
                             }
 
@@ -554,6 +561,7 @@ Rectangle {
                                         font.pixelSize: 12
                                         color: Theme.textMain
                                         wrapMode: Text.WordWrap
+                                        textFormat: Text.PlainText
                                         Layout.fillWidth: true
                                     }
                                 }
