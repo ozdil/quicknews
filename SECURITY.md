@@ -4,10 +4,10 @@
 
 Only the latest stable release on Omarchy Linux is actively supported with security updates.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| latest  | :white_check_mark: |
-| < latest| :x:                |
+| Version | Supported |
+| ------- | --------- |
+| latest  | Yes       |
+| < latest| No        |
 
 ## Reporting a Vulnerability
 

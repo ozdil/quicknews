@@ -369,7 +369,7 @@ async fn main() {
             println!("{}", status_obj);
         }
         "version" | "--version" | "-v" => {
-            println!("QuickNews Engine v0.2.0 (Omarchy Linux)");
+            println!("QuickNews Engine v0.2.3 (Omarchy Linux)");
         }
         _ => {
             print_usage();

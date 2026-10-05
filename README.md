@@ -1,12 +1,15 @@
 # QuickNews
 
 [![Omarchy Verified Plugin](https://img.shields.io/badge/Omarchy-Verified_Plugin-22c55e?style=for-the-badge&logo=omarchy)](https://github.com/ozdil)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-Support_Development-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ozdil)
 
 A high-performance, open-source, 100% ad-free, distraction-free, and text-first news reader powered by Rust and Quickshell.
 
 QuickNews delivers an uncompromising reading experience designed for developers, researchers, and minimalists. It strips away all visual clutter, clickbait traps, intrusive banner ads, tracking scripts, and cookie banners to present only clean typography and pure news text.
 
 Initially engineered for Linux and the Omarchy desktop ecosystem, its decoupled Rust core engine operates independently of the frontend, providing a modular CLI tool alongside a native Wayland GUI.
+
+[English](README.md) • [Türkçe](README.tr.md)
 
 ---
 
@@ -192,6 +195,16 @@ QuickNews is built following strict HANCORE Linux system standards:
 - **Process Isolation:** Background tasks run in segregated process groups with RAII cleanup guards.
 - **Strict File Permissions:** Configuration and data stores are restricted to `0600` file permissions and `0700` directory permissions.
 - **Safe I/O Buffering:** All network operations use hard size limits to protect system resources.
+
+---
+
+## Support & Sponsorship
+
+If you find QuickNews useful for your daily distraction-free news reading and want to support its ongoing development, consider buying a coffee:
+
+<a href="https://buymeacoffee.com/ozdil" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" width="180">
+</a>
 
 ---
 
