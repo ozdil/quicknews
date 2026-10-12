@@ -328,8 +328,9 @@ impl FeedParser {
                             } else {
                                 continue;
                             }
-                            // Strip HTML tags from summary
-                            let plain_summary = Self::strip_html_tags(&cur_desc);
+                            // Strip HTML tags and Markdown image syntax from summary
+                            // (image-free policy: no remote tracking pixels/beacons)
+                            let plain_summary = Self::sanitize_summary(&cur_desc);
                             let word_count = plain_summary.split_whitespace().count();
                             let reading_time = if word_count == 0 { 1 } else { word_count.div_ceil(200) };
 
@@ -375,6 +376,16 @@ impl FeedParser {
         }
 
         Ok(items)
+    }
+
+    /// Summary sanitizer for untrusted feed descriptions: removes HTML tags and
+    /// Markdown/HTML image syntax so no remote image can ever be requested.
+    fn sanitize_summary(raw: &str) -> String {
+        let no_tags = Self::strip_html_tags(raw);
+        AdBlocker::strip_markdown_images(&no_tags)
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     fn strip_html_tags(raw: &str) -> String {

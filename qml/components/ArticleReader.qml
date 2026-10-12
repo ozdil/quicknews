@@ -601,7 +601,9 @@ Rectangle {
                         lineHeightMode: Text.ProportionalHeight
                         color: Theme.textMain
                         wrapMode: Text.WordWrap
-                        textFormat: Text.MarkdownText
+                        // Only the extractor output (images stripped) is rendered as Markdown;
+                        // the untrusted feed summary fallback is always plain text.
+                        textFormat: (root.fullCleanArticle && root.fullCleanArticle.content_text) ? Text.MarkdownText : Text.PlainText
                     }
 
                     // End-of-article completion and mark-as-read action box
