@@ -97,7 +97,9 @@ impl QuickNewsApp {
                 && !cached.content_text.contains("## Sayfa 2");
 
             if !has_pagination_remnant {
-                return Ok(cached);
+                let mut sanitized = cached;
+                sanitized.content_text = crate::core::adblock::AdBlocker::strip_markdown_images(&sanitized.content_text);
+                return Ok(sanitized);
             }
         }
 

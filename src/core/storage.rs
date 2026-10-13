@@ -1,3 +1,4 @@
+use crate::core::adblock::AdBlocker;
 use crate::core::extractor::CleanArticle;
 use crate::core::feed::FeedItem;
 use crate::core::security::{atomic_write_file, safe_read_file, validate_url_ssrf, SecurityError, MAX_LOCAL_FILE_SIZE};
@@ -223,7 +224,9 @@ impl StorageManager {
     pub fn get_cached_content(&self, url: &str) -> Option<CleanArticle> {
         let p = self.content_cache_path(url);
         if let Ok(bytes) = safe_read_file(&p, MAX_LOCAL_FILE_SIZE) {
-            if let Ok(art) = serde_json::from_slice::<CleanArticle>(&bytes) {
+            if let Ok(mut art) = serde_json::from_slice::<CleanArticle>(&bytes) {
+                // Image-free guarantee: sanitize legacy cached content before returning
+                art.content_text = AdBlocker::strip_markdown_images(&art.content_text);
                 return Some(art);
             }
         }

@@ -663,5 +663,39 @@ fn test_ai_discover_linux_gaming_and_multi_topic() {
     assert!(game_sources.iter().any(|s| s.name == "Steam News" || s.name == "PC Gamer" || s.name == "Rock Paper Shotgun"));
 }
 
+#[test]
+fn test_cached_content_image_sanitization() {
+    use quicknews_core::core::extractor::CleanArticle;
+    use quicknews_core::core::storage::StorageManager;
+
+    let storage = StorageManager::new();
+    let test_url = "https://example.com/cached-image-test";
+
+    // Create a mock legacy cached article containing tracking pixels and markdown images
+    let legacy_article = CleanArticle {
+        title: "Legacy Article with Images".to_string(),
+        author: Some("Author".to_string()),
+        published_date: None,
+        source_url: test_url.to_string(),
+        source_name: Some("Test".to_string()),
+        category: Some("Tech".to_string()),
+        tags: vec![],
+        content_text: "Clean intro paragraph.\n\n![Tracking Pixel](https://tracker.example.com/pixel.png)\n\n<img src=\"https://tracker.example.com/beacon.gif\" />\n\nFinal clean text.".to_string(),
+        word_count: 8,
+        reading_time_mins: 1,
+    };
+
+    // Save directly to cache
+    storage.cache_article_content(test_url, &legacy_article).expect("cache write");
+
+    // Retrieve via get_cached_content and verify all image syntax is stripped
+    let retrieved = storage.get_cached_content(test_url).expect("cache hit");
+    assert!(!retrieved.content_text.contains("tracker.example.com"));
+    assert!(!retrieved.content_text.contains("![Tracking Pixel]"));
+    assert!(!retrieved.content_text.contains("<img"));
+    assert!(retrieved.content_text.contains("Clean intro paragraph."));
+    assert!(retrieved.content_text.contains("Final clean text."));
+}
+
 
 
