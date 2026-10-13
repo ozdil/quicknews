@@ -91,9 +91,16 @@ quicknews/
 - Quickshell (0.1.0+)
 - `JetBrainsMono Nerd Font`
 
-### Güvenli Yerel Kurulum
+### Kurulum ve Yapılandırma
+
+#### Adım 1: Eklentiyi Omarchy'ye Ekleyin
 ```bash
-cd ~/Projects/omarchy/quicknews
+omarchy plugin add https://github.com/ozdil/quicknews.git
+```
+
+#### Adım 2: Yerel Motoru Derleyin ve Kurun
+```bash
+cd ~/.config/omarchy/plugins/ozdil.quicknews
 ./build.sh
 ```
 

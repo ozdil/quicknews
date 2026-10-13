@@ -53,7 +53,8 @@ quicknews/
 |-- CONTRIBUTING.md                 Contribution rules and HANCORE security standards
 |-- README.md                       Project documentation and visual showcase
 |-- PKGBUILD                        Arch Linux / Omarchy package specification
-|-- install.sh                      Automated release compilation and installation script
+|-- build.sh                        Hardened userspace build and installation script
+|-- uninstall.sh                    Verified uninstallation script
 |-- quicknews                       Main CLI launcher and IPC toggle script
 |-- quicknews.desktop               XDG application desktop entry
 |-- Panel.qml                       Omarchy Top Bar status widget
@@ -171,17 +172,22 @@ quicknews status
 - Quickshell (0.1.0+)
 - `JetBrainsMono Nerd Font`
 
-### Automated Build and Installation
-Run the installer script to compile the release binary, set up desktop entries, and install panel components:
+### Installation and Setup
 
+#### Step 1: Add the Plugin to Omarchy
 ```bash
-git clone https://github.com/ozdil/quicknews.git
-cd quicknews
-git checkout 1bacb2a2cb2b21c0019eddd947d594906c5ab583
-./install.sh
+omarchy plugin add https://github.com/ozdil/quicknews.git
 ```
 
-To run the application:
+#### Step 2: Build and Install the Native Engine
+Run the hardened build script from the installed plugin directory to compile the release binary, set up desktop entries, and install panel components:
+
+```bash
+cd ~/.config/omarchy/plugins/ozdil.quicknews
+./build.sh
+```
+
+To run the standalone application:
 ```bash
 quicknews
 ```
