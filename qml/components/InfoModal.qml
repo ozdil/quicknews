@@ -357,6 +357,45 @@ Rectangle {
                         Layout.fillWidth: true
                     }
 
+                    // GitHub Sponsor Button
+                    Rectangle {
+                        height: 28
+                        width: sponsorRow.implicitWidth + 16
+                        radius: Theme.radiusSm
+                        color: sponsorMouse.containsMouse ? "#2d1627" : "#1f101b"
+                        border.color: sponsorMouse.containsMouse ? "#ea4aaa" : "#592143"
+                        border.width: 1
+
+                        RowLayout {
+                            id: sponsorRow
+                            anchors.centerIn: parent
+                            spacing: 6
+
+                            Text {
+                                text: Theme.iconHeart
+                                font.family: Theme.iconFont
+                                font.pixelSize: 11
+                                color: "#ea4aaa"
+                            }
+
+                            Text {
+                                text: "Sponsor"
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 11
+                                font.bold: true
+                                color: "#ea4aaa"
+                            }
+                        }
+
+                        MouseArea {
+                            id: sponsorMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Qt.openUrlExternally("https://github.com/sponsors/ozdil")
+                        }
+                    }
+
                     // Buy Me a Coffee Button
                     Rectangle {
                         height: 28
